@@ -140,6 +140,24 @@ def delete_file(file_uuid):
     else:
         return jsonify({"error": "File not found or access denied"}), 404
 
+@dashboard_bp.route('/api/file/<file_uuid>/content', methods=['PUT'])
+def update_file_content(file_uuid):
+    """
+    Overwrite the binary content of an existing file.
+    Expects Raw binary body.
+    Optional Header: X-AES-Key (if the key was rotated, else reuses old).
+    """
+    manager = get_user_manager()
+    try:
+        new_content = request.data
+        aes_key = request.headers.get('X-AES-Key')
+        result = manager.update_file_content(file_uuid, new_content, aes_key=aes_key)
+        return jsonify(result), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ─── File Metadata API ───────────────────────────────────────
 
 @dashboard_bp.route('/api/file/<file_uuid>/meta', methods=['GET'])

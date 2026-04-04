@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM_DEPROVISIONED // ZERONODE</title>
+    <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <style>
+        :root {
+            --surface: #0a0a0a;
+            --on-surface: #e6e6e6;
+            --error: #ee7d77;
+        }
+        body {
+            background-color: var(--surface);
+            color: var(--on-surface);
+            font-family: 'Inter', sans-serif;
+        }
+        .font-headline { font-family: 'Outfit', sans-serif; }
+        .font-mono { font-family: 'JetBrains+Mono', monospace; }
+        .font-label { font-family: 'Inter', sans-serif; font-weight: 300; }
+        
+        .binary-rain {
+            mask-image: linear-gradient(to bottom, transparent, black, transparent);
+            opacity: 0.03;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center overflow-hidden p-8">
+    
+    <!-- Background Decor -->
+    <div class="absolute inset-0 pointer-events-none">
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(238,125,119,0.03)_0%,transparent_70%)]"></div>
+        <div class="absolute inset-0 binary-rain font-mono text-[10px] leading-none select-none break-all">
+            01010101000101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101
+            DEPROVISIONED_IDENTITY_PURGED_SYSTEM_COLD_AND_SECURE_VAULT_INFRASTRUCTURE_LIQUIDATED_01010101010101010101
+        </div>
+    </div>
+
+    <div class="relative z-10 max-w-2xl w-full">
+        <!-- Status Indicator -->
+        <div class="flex items-center gap-4 mb-12">
+            <div class="w-3 h-3 rounded-full bg-error shadow-[0_0_15px_rgba(238,125,119,0.5)]"></div>
+            <div class="h-[1px] flex-1 bg-gradient-to-r from-error/30 to-transparent"></div>
+            <p class="font-label text-[10px] tracking-[0.5em] text-error uppercase">Environment_Cold_And_Secure</p>
+        </div>
+
+        <!-- Headline -->
+        <h1 class="font-headline text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 uppercase flex flex-col">
+            <span class="text-error/40">System_</span>
+            <span class="text-on-surface">Liquidated</span>
+        </h1>
+
+        <!-- Forensic Summary -->
+        <div class="border-l border-white/10 pl-8 mb-16">
+            <p class="font-label text-xs tracking-widest text-on-surface-variant/40 uppercase mb-8 leading-relaxed">
+                The Nuclear System Liquidation Protocol has been authoritatively executed. All configuration nodes, database layers, and physical volume targets have been physically purged. The ZeroNode infrastructure is now de-provisioned.
+            </p>
+            
+            <div class="grid grid-cols-2 gap-y-4 font-mono text-[9px] tracking-widest text-error/60 uppercase">
+                <div>[ CONFIGURATION ]</div> <div>PURGED</div>
+                <div>[ MASTER_DATABASE ]</div> <div>LIQUIDATED</div>
+                <div>[ USER_DATA_ROOT ]</div> <div>DESTROYED</div>
+                <div>[ AUTH_NODES ]</div> <div>DE-PROVISIONED</div>
+            </div>
+        </div>
+
+        <!-- Terminal Alert -->
+        <div class="bg-error/5 border border-error/20 p-6">
+            <p class="font-mono text-[10px] text-error/80 uppercase mb-2">FINAL_LOG_ENTRY:</p>
+            <p class="font-mono text-[11px] text-on-surface/80">"Process termination authorized. Connection severed. The vault is secure by absence."</p>
+        </div>
+        
+        <p class="mt-12 font-label text-[9px] tracking-[0.3em] text-on-surface-variant/20 uppercase text-center">
+            You may now safely close this terminal window.
+        </p>
+    </div>
+
+</body>
+</html>

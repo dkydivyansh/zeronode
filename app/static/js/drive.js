@@ -203,36 +203,6 @@ async function updateCacheCountUI() {
   }
 }
 
-// --- ZNode Security Suite ---
-window.ZNodeSecurity = {
-  wipe: async function() {
-    console.log("[Security] Initializing Atomic RAM Wipe...");
-    
-    // 1. Revoke all decrypted Blob URLs (Physical RAM release)
-    if (typeof previewUrls !== 'undefined') {
-        previewUrls.forEach((url) => {
-            try { URL.revokeObjectURL(url); } catch(e) {}
-        });
-        previewUrls.clear();
-    }
-    
-    // 2. Flush RAM Maps
-    if (typeof decryptedSessionCache !== 'undefined') decryptedSessionCache.clear();
-    if (typeof metadataCache !== 'undefined') metadataCache.clear();
-    if (typeof activeTaskSignals !== 'undefined') activeTaskSignals.clear();
-    
-    // 3. Purge Web Storage
-    sessionStorage.clear();
-    localStorage.clear();
-    
-    // 4. Purge Session Handles (IndexedDB)
-    if (typeof VaultCrypto !== 'undefined') await VaultCrypto.clearSessionKeys();
-    
-    console.log("[Security] RAM Wipe Complete.");
-    return true;
-  }
-};
-
 // --- 4. Transfer Manager (Global Activity Manager) ---
 function hasActivityHistory() {
   const active = document.getElementById("tm-active-list");
@@ -559,6 +529,295 @@ function formatSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
+function getNameWithoutMD(name) {
+  if (name && name.toLowerCase().endsWith(".md")) {
+    return name.slice(0, -3);
+  }
+  return name || "";
+}
+
+async function createNewNote() {
+  const title = await ZNodeDialog.prompt("NEW NOTE", "Enter note title:");
+  if (!title) return;
+
+  let fileName = title;
+  if (!fileName.toLowerCase().endsWith(".md")) fileName += ".md";
+
+  const initialContent = `# ${title}\n\n`;
+  const tfId = Math.random().toString(36).substr(2, 9);
+  addTransfer(tfId, fileName, "ENCRYPT");
+
+  try {
+    const masterKey = await DriveCrypto.getVaultMasterKey();
+    const fileKey = await DriveCrypto.generateFileKey();
+    const wrappedKey64 = await DriveCrypto.wrapFileKey(fileKey, masterKey);
+
+    const initRes = await fetch("/app/api/file/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        file_name: fileName,
+        aes_key: wrappedKey64,
+        folder_id: currentFolderId,
+      }),
+    });
+    const { uuid } = await initRes.json();
+
+    const encoder = new TextEncoder();
+    const arrayBuf = encoder.encode(initialContent);
+    const iv = new Uint8Array(12);
+    const enc = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv },
+      fileKey,
+      arrayBuf,
+    );
+
+    await fetch(`/app/api/file/${uuid}/chunk`, {
+      method: "POST",
+      headers: {
+        "X-Chunk-Offset": "0",
+        "Content-Type": "application/octet-stream",
+      },
+      body: enc,
+    });
+
+    await fetch(`/app/api/file/${uuid}/finalize`, { method: "POST" });
+
+    completeTransfer(tfId);
+    showZNodeToast(`NOTE CREATED: ${title}`, "info");
+    await fetchDrive(currentFolderId);
+
+    // Auto-open
+    openLightbox({
+      id: uuid,
+      uuid: uuid,
+      name: fileName,
+      type: "file",
+      size: arrayBuf.byteLength,
+      sizeStr: formatSize(arrayBuf.byteLength),
+      modifiedStr: new Date().toLocaleDateString(),
+    });
+
+    setTimeout(() => {
+      const pb = document.getElementById("pv-preview-btn");
+      if (pb) pb.click();
+    }, 500);
+  } catch (e) {
+    console.error(e);
+    failTransfer(tfId);
+    showZNodeToast(`FAILED TO CREATE NOTE: ${e.message}`, "error");
+  }
+}
+
+function initMarkdownEditor(uuid, fileName, content) {
+  const pvContent = document.getElementById("pv-content");
+  if (!pvContent) return;
+
+  // Add Editor Styles if missing
+  if (!document.getElementById("md-editor-styles")) {
+    const style = document.createElement("style");
+    style.id = "md-editor-styles";
+    style.innerHTML = `
+      .md-tool { 
+        width: 32px; 
+        height: 32px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        font-family: var(--font-label);
+        font-size: 11px;
+        border: 1px solid rgba(255,255,255,0.05);
+      }
+      #md-formatted h1 { font-family: var(--font-headline); font-size: 1.8rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+      #md-formatted h2 { font-family: var(--font-headline); font-size: 1.4rem; margin-top: 2rem; margin-bottom: 1rem; }
+      #md-formatted h3 { font-family: var(--font-headline); font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }
+      #md-formatted p { font-family: var(--font-body); line-height: 1.8; margin-bottom: 1.2rem; color: rgba(255,255,255,0.8); }
+      #md-formatted ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1.2rem; }
+      #md-formatted ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 1.2rem; }
+      #md-formatted blockquote { border-left: 3px solid var(--color-primary); padding-left: 1.4rem; font-style: italic; opacity: 0.7; margin: 1.5rem 0; color: var(--color-primary-dim); }
+      #md-formatted pre { background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; margin: 1rem 0; overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); }
+      #md-formatted code { background: rgba(255,255,255,0.1); padding: 0.2rem 0.4rem; font-family: var(--font-mono); font-size: 10px; border-radius: 2px; }
+      #md-formatted a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; opacity: 0.8; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const editorHtml = `
+      <div class="flex flex-col w-full h-full bg-surface-container overflow-hidden">
+          <div class="flex border-b border-outline-variant/20 bg-surface-container-high h-[54px] shrink-0 items-center px-6 justify-between shadow-lg z-20">
+              <div class="flex items-center gap-4">
+                  <div class="flex items-center gap-1 border-r border-outline-variant/20 pr-4 mr-1" id="md-toolbar">
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Heading 1" data-cmd="formatBlock" data-val="h1"><b>H1</b></button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Heading 2" data-cmd="formatBlock" data-val="h2"><b>H2</b></button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded text-[9px]" title="Heading 3" data-cmd="formatBlock" data-val="h3"><b>H3</b></button>
+                      <div class="w-[1px] h-4 bg-outline-variant/20 mx-1"></div>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Bold" data-cmd="bold"><b>B</b></button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded italic" title="Italic" data-cmd="italic">I</button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded line-through" title="Strikethrough" data-cmd="strikeThrough">S</button>
+                      <div class="w-[1px] h-4 bg-outline-variant/20 mx-1"></div>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Quote" data-cmd="formatBlock" data-val="blockquote">“</button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Code" data-cmd="formatBlock" data-val="pre"><b>&lt;/&gt;</b></button>
+                      <div class="w-[1px] h-4 bg-outline-variant/20 mx-1"></div>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Bullet List" data-cmd="insertUnorderedList">•</button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Numbered List" data-cmd="insertOrderedList">1.</button>
+                      <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Link" data-cmd="createLink">🔗</button>
+                  </div>
+                  <button id="md-toggle-raw" class="font-mono text-[9px] tracking-[0.2em] text-primary/40 hover:text-primary uppercase transition-colors px-3 py-1.5 border border-primary/10 hover:bg-primary/5">
+                    SEE RAW
+                  </button>
+              </div>
+              <div class="flex items-center gap-3">
+                  <button id="md-save-btn" class="bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[10px] tracking-[0.2em] px-8 py-2.5 uppercase transition-all flex items-center gap-2 group">
+                     <span id="md-save-text">SAVE TO VAULT</span>
+                     <svg class="w-3 h-3 group-hover:animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path></svg>
+                  </button>
+                  <button id="md-close-btn" class="text-on-surface-variant/30 hover:text-error transition-all p-2" title="Exit Note Studio">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+              </div>
+          </div>
+          <div class="flex-1 flex overflow-hidden relative">
+              <div id="md-formatted" contenteditable="true" class="flex-1 bg-surface p-16 md:px-24 lg:px-48 overflow-y-auto focus:outline-none leading-relaxed transition-all duration-300 selection:bg-primary/30 prose prose-invert max-w-none scroll-smooth h-full" spellcheck="true" placeholder="Vault Note Content..."></div>
+              <textarea id="md-raw" class="flex-1 bg-[#020202] text-on-surface font-mono text-[11px] p-16 md:p-24 resize-none focus:outline-none focus:ring-0 leading-loose overflow-y-auto hidden selection:bg-primary/30 h-full border-l border-outline-variant/10"></textarea>
+          </div>
+      </div>
+  `;
+
+  pvContent.innerHTML = editorHtml;
+
+  const formatted = document.getElementById("md-formatted");
+  const raw = document.getElementById("md-raw");
+  const toggleRawBtn = document.getElementById("md-toggle-raw");
+  const saveBtn = document.getElementById("md-save-btn");
+  const saveText = document.getElementById("md-save-text");
+
+  // Initial Content Sync: MD -> HTML -> Editor
+  if (window.marked) {
+    formatted.innerHTML = window.marked.parse(content || "");
+  } else {
+    formatted.innerText = content;
+  }
+
+  // Setup Turndown for saving
+  let turndown;
+  if (window.TurndownService) {
+    turndown = new window.TurndownService({
+       headingStyle: 'atx',
+       hr: '---',
+       bulletListMarker: '-',
+       codeBlockStyle: 'fenced'
+    });
+  }
+
+  let isRawMode = false;
+  toggleRawBtn.onclick = () => {
+    isRawMode = !isRawMode;
+    if (isRawMode) {
+      // Formatted -> Raw
+      raw.value = turndown ? turndown.turndown(formatted.innerHTML) : formatted.innerText;
+      formatted.classList.add("hidden");
+      raw.classList.remove("hidden");
+      toggleRawBtn.innerText = "EXIT RAW";
+      toggleRawBtn.classList.add("bg-primary/10", "text-primary");
+      document.getElementById("md-toolbar").style.opacity = "0.3";
+      document.getElementById("md-toolbar").style.pointerEvents = "none";
+    } else {
+      // Raw -> Formatted
+      formatted.innerHTML = window.marked ? window.marked.parse(raw.value) : raw.value;
+      raw.classList.add("hidden");
+      formatted.classList.remove("hidden");
+      toggleRawBtn.innerText = "SEE RAW";
+      toggleRawBtn.classList.remove("bg-primary/10", "text-primary");
+      document.getElementById("md-toolbar").style.opacity = "1";
+      document.getElementById("md-toolbar").style.pointerEvents = "auto";
+    }
+  };
+
+  // Toolbar Implementation
+  document.querySelectorAll(".md-tool").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd;
+      const val = btn.dataset.val || null;
+      
+      if (cmd === 'createLink') {
+        const url = prompt("Enter URL:", "https://");
+        if (url) document.execCommand(cmd, false, url);
+      } else {
+        document.execCommand(cmd, false, val);
+      }
+      formatted.focus();
+    };
+  });
+
+  const internalCloseBtn = document.getElementById("md-close-btn");
+  if (internalCloseBtn) internalCloseBtn.onclick = closeLightbox;
+
+  if (saveBtn) {
+    saveBtn.onclick = async () => {
+      const tfId = Math.random().toString(36).substr(2, 9);
+      addTransfer(tfId, fileName, "ENCRYPT");
+      
+      saveBtn.disabled = true;
+      saveText.innerText = "ENCRYPTING...";
+
+      try {
+        const metadata = metadataCache.get(uuid);
+        const masterKey = await DriveCrypto.getVaultMasterKey();
+        const fileKey = await DriveCrypto.unwrapFileKey(metadata.aes_key, masterKey);
+
+        saveText.innerText = "SAVING...";
+        // Skip UPLOAD event for notes as requested, just keep ENCRYPT visible
+        // promoteTransfer(tfId, "UPLOAD");
+        
+        // Final Sync to MD
+        let mdOutput;
+        if (isRawMode) {
+            mdOutput = raw.value;
+        } else {
+            mdOutput = turndown ? turndown.turndown(formatted.innerHTML) : formatted.innerText;
+        }
+
+        const encoder = new TextEncoder();
+        const arrayBuf = encoder.encode(mdOutput);
+        const iv = new Uint8Array(12);
+        const enc = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          fileKey,
+          arrayBuf,
+        );
+
+        const res = await fetch(`/app/api/file/${uuid}/content`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: enc,
+        });
+
+        if (!res.ok) throw new Error("Save Error");
+
+        saveText.innerText = "SAVED TO VAULT";
+        completeTransfer(tfId);
+        
+        // Skip session caching for .md files as requested
+        // decryptedSessionCache.set(uuid, new Blob([arrayBuf], { type: "text/markdown" }));
+
+        setTimeout(() => {
+          saveText.innerText = "SAVE TO VAULT";
+          saveBtn.disabled = false;
+        }, 1500);
+      } catch (err) {
+        console.error(err);
+        failTransfer(tfId);
+        saveText.innerText = "ERROR";
+        setTimeout(() => {
+          saveText.innerText = "SAVE TO VAULT";
+          saveBtn.disabled = false;
+        }, 3000);
+      }
+    };
+  }
+}
+
 function getFileIcon(name, type, sizeClass = "w-8 h-8") {
   if (type === "folder") {
     return `<svg class="${sizeClass} text-primary/80 mb-2" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>`;
@@ -647,11 +906,11 @@ function renderItem(item) {
       : "";
 
     return `
-        <div class="col-span-1 border border-outline-variant/20 bg-surface-container-high hover:bg-surface-variant transition-colors p-4 flex flex-col items-center justify-center cursor-pointer interactive-el group relative drive-item overflow-hidden" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}" ${previewStyle}>
+        <div class="col-span-1 min-h-[160px] border border-outline-variant/20 bg-surface-container-high hover:bg-surface-variant transition-colors p-4 flex flex-col items-center justify-center cursor-pointer interactive-el group relative drive-item overflow-hidden" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}" ${previewStyle}>
             ${bgLayer}
             <div class="relative z-10 flex flex-col items-center justify-center w-full">
                 ${iconHtml}
-                <span class="font-label text-xs tracking-wider text-on-surface w-full text-center truncate group-hover:text-primary transition-colors ${hasPreview ? "drop-shadow-lg" : ""}">${item.name || item.file_name}</span>
+                <span class="font-label text-xs tracking-wider text-on-surface w-full text-center truncate group-hover:text-primary transition-colors ${hasPreview ? "drop-shadow-lg" : ""}">${getNameWithoutMD(item.name || item.file_name)}</span>
                 <span class="font-mono text-[9px] text-on-surface-variant/40 mt-1 ${hasPreview ? "text-white/70" : ""}">${sizeStr}</span>
             </div>
         </div>`;
@@ -661,7 +920,7 @@ function renderItem(item) {
     <div class="col-span-full border-b border-outline-variant/10 hover:bg-surface-variant transition-colors py-2 px-4 flex items-center justify-between cursor-pointer interactive-el drive-item" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}">
         <div class="flex items-center gap-3 w-1/2">
             ${iconList}
-            <span class="font-label text-sm tracking-wide text-on-surface truncate">${item.name || item.file_name}</span>
+            <span class="font-label text-sm tracking-wide text-on-surface truncate">${getNameWithoutMD(item.name || item.file_name)}</span>
         </div>
         <div class="font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${sizeStr}</div>
         <div class="font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${new Date(item.modified).toLocaleDateString()}</div>
@@ -770,8 +1029,15 @@ function openLightbox(dataset) {
   ].includes(ext);
   const isSmall = parseInt(dataset.size || 0) < 100 * 1024 * 1024;
 
-  if (pvPreviewBtn)
+  const footer = document.getElementById("pv-footer");
+  if (footer) footer.style.display = ext === "md" ? "none" : "flex";
+
+  if (pvPreviewBtn) {
     pvPreviewBtn.style.display = isMedia && isSmall ? "flex" : "none";
+    if (ext === "md") {
+      setTimeout(() => pvPreviewBtn.click(), 100);
+    }
+  }
 
   if (activeTaskSignals.has(dataset.id)) {
     toggleLightboxButtons(true);
@@ -827,6 +1093,11 @@ function initDriveControls() {
       currentView = "list";
       fetchDrive(currentFolderId);
     };
+
+  const newNoteBtn = document.getElementById("drive-new-note");
+  if (newNoteBtn) {
+    newNoteBtn.onclick = createNewNote;
+  }
 
   const newFolderBtn = document.getElementById("dynamic-new-folder");
   if (newFolderBtn)
@@ -1045,12 +1316,20 @@ function initDriveControls() {
           fetchDrive(currentFolderId);
         }
       } else if (action === "rename") {
-        const nn = await ZNodeDialog.prompt(
+        const isMdNote = type === "file" && (activeCtxItem.name || "").toLowerCase().endsWith(".md");
+        const displayName = isMdNote ? activeCtxItem.name.slice(0, -3) : activeCtxItem.name;
+
+        let nn = await ZNodeDialog.prompt(
           "RENAME ITEM",
           `Enter new name for this ${type}:`,
-          activeCtxItem.name,
+          displayName,
         );
-        if (nn && nn !== activeCtxItem.name) {
+        
+        if (nn && nn !== displayName) {
+          // Re-append .md if it's a note and user didn't manually add it
+          if (isMdNote && !nn.toLowerCase().endsWith(".md")) {
+            nn += ".md";
+          }
           const endpoint =
             type === "folder"
               ? `/app/api/drive/folder/${id}`
@@ -1135,6 +1414,10 @@ function initDriveControls() {
           setTimeout(() => renderPDF(url, "pdf-viewer-canvas"), 100);
         } else if (["txt", "md", "js", "ts", "html", "css", "py", "json", "sql", "log", "rtf", "c", "cpp", "java", "php", "sh"].includes(ext)) {
           const t = await blob.text();
+          if (ext === "md") {
+            initMarkdownEditor(activePreviewItem.id, activePreviewItem.name, t);
+            return;
+          }
           el = document.createElement("pre");
           el.innerText = t;
           el.className =
@@ -1265,12 +1548,13 @@ async function processUploadQueue(file) {
 
 async function uploadFile(file, tfId) {
   if (!file) return;
-  if (file.size === 0) {
+  if (file.size === 0 && !file.name.endsWith(".md")) {
     failTransfer(tfId);
     showZNodeToast(`ABORTED: ${file.name} is an empty file (0 bytes).`, "error");
     return;
   }
   const isLarge = file.size > 500 * 1024 * 1024; // 500MB threshold
+  const ext = file.name.split(".").pop().toLowerCase();
 
   // Status already added by processUploadQueue
   try {
@@ -1326,7 +1610,7 @@ async function uploadFile(file, tfId) {
 
     await fetchWithRetry(`/app/api/file/${uuid}/finalize`, { method: "POST" });
 
-    if (!isLarge) {
+    if (!isLarge && ext !== "md") {
       try {
         await cacheFile(uuid, new Blob(cipherChunks));
       } catch (e) {}
@@ -1351,10 +1635,11 @@ async function downloadFile(uuid, name, returnBlob = false) {
   }
   if (activeTaskSignals.has(uuid)) return await activeTaskSignals.get(uuid);
 
-  const task = (async () => {
-    let tfId = Math.random().toString(36).substr(2, 9);
-    try {
-      addTransfer(tfId, name, "DECRYPT");
+    const task = (async () => {
+      let tfId = Math.random().toString(36).substr(2, 9);
+      const ext = (name || "").split(".").pop().toLowerCase();
+      try {
+        addTransfer(tfId, name, "DECRYPT");
       let encryptedBytes;
       let metadata = metadataCache.get(uuid);
 
@@ -1402,8 +1687,8 @@ async function downloadFile(uuid, name, returnBlob = false) {
         metadataCache.set(uuid, metadata);
       }
 
-      // If we downloaded it fresh, cache it with the metadata now
-      if (!diskCached) {
+      // If we downloaded it fresh, cache it with the metadata now (unless it's an .md file)
+      if (!diskCached && ext !== "md") {
          await cacheFile(uuid, new Blob([encryptedBytes]), metadata);
       }
       if (!encryptedBytes || encryptedBytes.byteLength === 0) {
@@ -1431,7 +1716,6 @@ async function downloadFile(uuid, name, returnBlob = false) {
           ),
         );
       }
-      const ext = (name || "").split(".").pop().toLowerCase();
       const mimeTypes = {
         pdf: "application/pdf",
         txt: "text/plain",
@@ -1450,7 +1734,9 @@ async function downloadFile(uuid, name, returnBlob = false) {
       const finalMime = mimeTypes[ext] || "application/octet-stream";
 
       const finalBlob = new Blob(decryptedChunks, { type: finalMime });
-      decryptedSessionCache.set(uuid, finalBlob);
+      if (ext !== "md") {
+        decryptedSessionCache.set(uuid, finalBlob);
+      }
       completeTransfer(tfId);
       return finalBlob;
     } catch (err) {

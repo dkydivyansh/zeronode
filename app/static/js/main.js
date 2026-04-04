@@ -142,17 +142,58 @@ class VaultCrypto {
 
 // --- Vault UI Controller ---
 document.addEventListener("DOMContentLoaded", async () => {
-    // Check if we are already unlocked in memory for this tab
+    const overlay = document.getElementById('vault-overlay');
+    const errBox = document.getElementById('vault-error');
+    if (!overlay) return; 
+
+    // SESSION_AUTHORITATIVE_BYPASS: If the user is already authoritatively unlocked in this tab, 
+    // we skip the high-impact visual audit to improve UX during routine navigation.
     if (sessionStorage.getItem("vault_unlocked") === "true") {
-        document.getElementById('vault-overlay')?.remove();
-        console.log("[Vault] Session active securely in memory.");
+        overlay.remove();
+        console.log("[Vault] Session active securely in memory. Skipping visual audit.");
+        
+        // ... background sync ...
+        (async () => {
+            try {
+                const res = await fetch('/app/api/key/status');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (!json.has_key) {
+                        console.error("[Vault] Server desync detected in background. Purging 'Zombie' session...");
+                        await ZNodeSecurity.wipe();
+                        window.location.reload(); 
+                    }
+                }
+            } catch(e) {}
+        })();
         return;
     }
 
-    const overlay = document.getElementById('vault-overlay');
-    if (!overlay) return; // not authenticated or no overlay existing
+    // AUTHORITATIVE_VISIBILITY: For fresh or locked sessions, we exhibit the high-integrity gateway.
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
 
-    const errBox = document.getElementById('vault-error');
+    // AUTHORITATIVE_BACKEND_SYNC: This is the priority stage for LOCKED sessions. 
+    async function performBackendSync() {
+        try {
+            const res = await fetch('/app/api/key/status');
+            if (!res.ok) throw new Error("Could not reach vault API");
+            const json = await res.json();
+            
+            if (json.has_key) {
+                setupUnlockFlow();
+            } else {
+                // AUTONOMIC_SYNCHRONIZATION: Purge legacy keys if server reports empty volume
+                if (localStorage.getItem('vault_pub') || localStorage.getItem('vault_wrapped_priv') || (await VaultCrypto.getSessionKey())) {
+                    console.warn("[Vault] Server desync detected. Purging 'Zombie' keys...");
+                    await ZNodeSecurity.wipe();
+                }
+                setupGenerationFlow();
+            }
+        } catch (e) {
+            errBox.textContent = "Network error connecting to Vault.";
+        }
+    }
 
     /** PHASE 0: Secure Environment Audit (Advanced Heuristics) */
     async function runSecurityAudit() {
@@ -266,24 +307,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Initialize Audit
+    // Initialize Audit (This is now complementary to the sync gate)
     runSecurityAudit();
-
-    async function performBackendSync() {
-        try {
-            const res = await fetch('/app/api/key/status');
-            if (!res.ok) throw new Error("Could not reach vault API");
-            const json = await res.json();
-            
-            if (json.has_key) {
-                setupUnlockFlow();
-            } else {
-                setupGenerationFlow();
-            }
-        } catch (e) {
-            errBox.textContent = "Network error connecting to Vault.";
-        }
-    }
 
     function showSpinner(btn) {
         btn.classList.add('loading');
@@ -754,6 +779,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 });
+
+window.ZNodeSecurity = {
+  wipe: async function() {
+    console.log("[Security] Initializing Atomic RAM Wipe...");
+    
+    // 1. Revoke all decrypted Blob URLs (Physical RAM release)
+    if (typeof previewUrls !== 'undefined') {
+        previewUrls.forEach((url) => {
+            try { URL.revokeObjectURL(url); } catch(e) {}
+        });
+        previewUrls.clear();
+    }
+    
+    // 2. Flush RAM Maps
+    if (typeof decryptedSessionCache !== 'undefined') decryptedSessionCache.clear();
+    if (typeof metadataCache !== 'undefined') metadataCache.clear();
+    if (typeof activeTaskSignals !== 'undefined') activeTaskSignals.clear();
+    
+    // 3. Purge Web Storage
+    sessionStorage.clear();
+    localStorage.clear();
+    
+    // 4. Purge Session Handles (IndexedDB)
+    if (typeof VaultCrypto !== 'undefined') await VaultCrypto.clearSessionKeys();
+    
+    console.log("[Security] RAM Wipe Complete.");
+    return true;
+  }
+};
 
 /**
  * ZNode Dialog Service

@@ -8,7 +8,7 @@ class Manifest(ModuleManifest):
     name        = "Admin"
     description = "System administration and global telemetry."
     admin_only  = True
-    routes      = ["/", "/api/stats", "/api/promote", "/api/demote", "/api/whitelist/add", "/api/whitelist/remove", "/api/user/wipe"]
+    routes      = ["/", "/api/stats", "/api/promote", "/api/demote", "/api/whitelist/add", "/api/whitelist/remove", "/api/user/wipe", "/api/server/wipe"]
 
     def get_view(self, module_name, **kwargs):
         # Dispatch based on sub-path
@@ -75,6 +75,16 @@ class Manifest(ModuleManifest):
                 return jsonify({"error": "Cannot demote yourself."}), 400
             success = db_handler.remove_admin(data['email'], g.user['email'])
             return jsonify({"status": "ok" if success else "failed"}), 200
+
+        if path == "/api/server/wipe":
+            data = request.json
+            expected = "ERASE ALL SERVER DATA"
+            if not data or data.get('confirmation') != expected:
+                return jsonify({"error": "Forensic confirmation mismatch. Protocol aborted."}), 400
+            
+            # AUTHORIZATION_GATE: Physically de-provision the entire server
+            success = db_handler.nuclear_wipe_server()
+            return jsonify({"status": "SYSTEM_LIQUIDATED" if success else "CRITICAL_FAILURE"}), 200 if success else 500
 
         return jsonify({"error": "Interface node not found"}), 404
 

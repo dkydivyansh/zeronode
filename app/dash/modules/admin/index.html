@@ -19,8 +19,9 @@
     </div>
 
     <div class="mb-12">
-        <!-- Physical Disk Gauge (Full Width Context) -->
-        <div class="w-full border border-outline-variant/10 p-8 bg-surface-container/30 backdrop-blur-md relative overflow-hidden group">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-12">
+        <!-- Storage Telemetry (Left/Middle) -->
+        <div class="lg:col-span-2 border border-outline-variant/10 p-8 bg-surface-container/30 backdrop-blur-md relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
             <div class="flex justify-between items-center mb-10">
                 <p class="font-label text-[10px] tracking-[0.3em] text-primary/60 uppercase">INTERNAL_STORAGE_TELEMETRY</p>
@@ -30,24 +31,40 @@
                 </div>
             </div>
             <!-- Progress Bar -->
-            <div class="w-full h-[2px] bg-white/5 mb-8 overflow-hidden">
+            <div class="w-full h-[2px] bg-white/5 mb-8 overflow-hidden text-nowrap">
                 <div id="disk-bar" class="h-full bg-primary shadow-[0_0_10px_rgba(193,199,207,0.5)] transition-all duration-1000" style="width: {{ stats.server_drive.percent }}%"></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="grid grid-cols-3 gap-8">
                 <div>
                     <p class="font-label text-[10px] tracking-widest text-on-surface-variant/40 mb-2 uppercase">CAPACITY</p>
-                    <p id="disk-total" class="font-mono text-base text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.total / 1e9) | round(2) }} GB</p>
+                    <p id="disk-total" class="font-mono text-xs md:text-sm text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.total / 1e9) | round(2) }} GB</p>
                 </div>
                 <div>
                     <p class="font-label text-[10px] tracking-widest text-on-surface-variant/40 mb-2 uppercase">ALLOCATED</p>
-                    <p id="disk-used" class="font-mono text-base text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.used / 1e9) | round(2) }} GB</p>
+                    <p id="disk-used" class="font-mono text-xs md:text-sm text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.used / 1e9) | round(2) }} GB</p>
                 </div>
                 <div>
                     <p class="font-label text-[10px] tracking-widest text-primary/60 mb-2 uppercase">AVAILABLE</p>
-                    <p id="disk-free" class="font-mono text-base text-primary tracking-tighter text-nowrap">{{ (stats.server_drive.free / 1e9) | round(2) }} GB</p>
+                    <p id="disk-free" class="font-mono text-xs md:text-sm text-primary tracking-tighter text-nowrap">{{ (stats.server_drive.free / 1e9) | round(2) }} GB</p>
                 </div>
             </div>
         </div>
+
+        <!-- System Liquidation (Right) -->
+        <div class="border border-error/20 p-8 bg-error/5 relative overflow-hidden group flex flex-col justify-between">
+            <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-error/30 to-transparent"></div>
+            <div>
+                <h2 class="font-headline text-lg tracking-[0.4em] text-error uppercase mb-4 glitch-text">System_Liquidation</h2>
+                <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase leading-relaxed mb-6">
+                    AUTHORITATIVE_PURGE: De-provision server, purge .env, database, and all data volumes.
+                </p>
+            </div>
+            
+            <button onclick="authorizeSystemLiquidation()" class="w-full border border-error/40 py-4 font-label text-[9px] tracking-[0.4em] font-bold text-error uppercase hover:bg-error hover:text-black transition-all duration-500 shadow-[0_0_15px_rgba(238,125,119,0.05)] hover:shadow-[0_0_30px_rgba(238,125,119,0.1)]">
+                Wipe_Server
+            </button>
+        </div>
+    </div>
     </div>
 
     <!-- Section: User Management & Identity Auditing -->
@@ -295,11 +312,61 @@ async function demote(email) {
     refreshStats(document.getElementById('user-search-query').value);
 }
 
+async function authorizeSystemLiquidation() {
+    const warning = await ZNodeDialog.confirm(
+        "CRITICAL_SYSTEM_ALERT",
+        "You are about to authoritatively LIQUIDATE the entire server infrastructure. This will PERMANENTLY destroy all configurations, databases, and user data volumes. Proceed?"
+    );
+    
+    if (!warning) return;
+    
+    const finalWarning = await ZNodeDialog.confirm(
+        "LIQUIDATION_COMMITMENT",
+        "WARNING: This action is irreversible. All vault assets will be physically purged. Still proceed?"
+    );
+    
+    if (!finalWarning) return;
+    
+    const expected = "ERASE ALL SERVER DATA";
+    const input = await ZNodeDialog.prompt(
+        "FORENSIC_AUTHORIZATION",
+        `Type "${expected}" to authorize system de-provisioning:`
+    );
+    
+    if (input !== expected) {
+        await ZNodeDialog.alert("PROTOCOL_ABORTED", "Forensic confirmation mismatch. System gate remains locked.");
+        return;
+    }
+    
+    await ZNodeDialog.alert("LIQUIDATION_COMMITTED", "System de-provisioning node authorized. Executing absolute purge...");
+    
+    try {
+        const res = await fetch('/app/admin/api/server/wipe', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ confirmation: input })
+        });
+        
+        if (res.ok) {
+            window.location.href = '/auth/logout?auto=1&terminal=1';
+        } else {
+            const err = await res.json();
+            await ZNodeDialog.alert("LIQUIDATION_FAILURE", err.error || "System liquidation reported an internal failure.");
+        }
+    } catch (e) {
+        console.error("LIQUIDATION_FAILURE:", e);
+        // Page may go down during wipe, redirect anyway to clear context
+        window.location.href = '/auth/logout?auto=1';
+    }
+}
+
 // Initial engagement and rolling telemetry
-refreshStats();
-setInterval(() => {
-    const query = document.getElementById('user-search-query').value;
-    if (!query) refreshStats(); // Only auto-refresh if not searching
-}, 30000); 
+if (document.getElementById('admins-table-body')) {
+    refreshStats();
+    setInterval(() => {
+        const query = document.getElementById('user-search-query').value;
+        if (!query) refreshStats(); // Only auto-refresh if not searching
+    }, 30000); 
+}
 </script>
 {% endblock %}

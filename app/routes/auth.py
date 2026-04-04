@@ -132,12 +132,13 @@ def logout():
     cfg = current_app.config
     next_path = request.args.get('next', '/login')
     auto = request.args.get('auto', '0')
+    terminal = request.args.get('terminal', '0')
     
     token = request.cookies.get(cfg['SESSION_COOKIE_NAME'])
     if token:
         db_handler.destroy_session(token)
 
-    resp = make_response(redirect(f'/auth/exit?next={urllib.parse.quote(next_path)}&auto={auto}'))
+    resp = make_response(redirect(f'/auth/exit?next={urllib.parse.quote(next_path)}&auto={auto}&terminal={terminal}'))
     resp.delete_cookie(cfg['SESSION_COOKIE_NAME'])
     return resp
 
@@ -148,6 +149,11 @@ def logout_exit():
     from flask import render_template
     next_url = request.args.get('next', '/login')
     auto_redirect = request.args.get('auto', '0') == '1'
+    is_terminal = request.args.get('terminal', '0') == '1'
+    
+    if is_terminal:
+        return render_template('view/deprovisioned.html')
+        
     return render_template('view/logout.html', next_url=next_url, auto_redirect=auto_redirect)
 
 

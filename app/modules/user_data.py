@@ -181,7 +181,10 @@ class UserDataManager:
         file_path = os.path.join(self.user_dir, f"{file_uuid}.bin")
         file_size = os.path.getsize(file_path)
         # print(f"DEBUG: Finalizing {file_uuid}. Actual disk size: {file_size}")
-        if file_size == 0:
+        
+        # Exception: Allow 0-byte files for Markdown notes as requested
+        is_md = row['file_name'].lower().endswith('.md')
+        if file_size == 0 and not is_md:
             raise RuntimeError(f"File {file_uuid} has 0 bytes — no chunks were written.")
 
         # Final size and timestamp commit
@@ -195,6 +198,52 @@ class UserDataManager:
             "uuid": file_uuid,
             "file_name": row['file_name'],
             "size": file_size,
+            "last_modified": now_ts
+        }
+
+
+    def update_file_content(self, file_uuid: str, file_data: bytes, aes_key: str = None) -> dict:
+        """Atomically overwrite file content and update metadata. 
+        Reuses existing AES key if not provided."""
+        # Enforce Quota
+        stats = self.get_vault_stats()
+        if (stats['total_bytes'] + len(file_data)) > (10 * 1024 * 1024 * 1024):
+            raise Exception("Storage limit of 10GB exceeded. Please delete files to free space.")
+
+        # Check ownership
+        with self._get_conn() as conn:
+            row = conn.execute("SELECT uuid FROM files WHERE uuid = ? AND owner = ?",
+                               (file_uuid, self.user_id)).fetchone()
+        if not row:
+            raise PermissionError(f"File {file_uuid} not found or access denied.")
+
+        file_path = os.path.join(self.user_dir, f"{file_uuid}.bin")
+        # Write to disk (overwrite)
+        with open(file_path, 'wb') as f:
+            f.write(file_data)
+            # Ensure physical persistence on Windows
+            f.flush()
+            os.fsync(f.fileno())
+
+        # Update metadata
+        now_ts = datetime.now(timezone.utc).isoformat()
+        with self._get_conn() as conn:
+            if aes_key:
+                conn.execute(
+                    "UPDATE files SET last_modified = ?, file_size = ?, aes_key = ? WHERE uuid = ?",
+                    (now_ts, len(file_data), aes_key, file_uuid)
+                )
+            else:
+                conn.execute(
+                    "UPDATE files SET last_modified = ?, file_size = ? WHERE uuid = ?",
+                    (now_ts, len(file_data), file_uuid)
+                )
+            conn.commit()
+
+        self.invalidate_stats_cache()
+        return {
+            "uuid": file_uuid,
+            "size": len(file_data),
             "last_modified": now_ts
         }
 
