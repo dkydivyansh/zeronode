@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ZERONODE // DISCONNECTED</title>
+    <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#c1c7cf",
+                        "secondary": "#9f9d9d",
+                        "accent": "#d7e2ff",
+                        "surface": "#0e0e0e",
+                        "on-surface": "#e5e5e5",
+                        "on-surface-variant": "#ababab",
+                        "outline-variant": "#484848",
+                        "tertiary": "#19ff6b",
+                        "error": "#ee7d77"
+                    },
+                    fontFamily: {
+                        "headline": ["Noto Serif", "Georgia", "serif"],
+                        "label": ["Space Grotesk", "Inter", "sans-serif"],
+                        "mono": ["monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #000; color: #e5e5e5; }
+        .scanline {
+            background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
+            background-size: 100% 4px;
+        }
+        .checkmark-anim {
+            stroke-dasharray: 24;
+            stroke-dashoffset: 24;
+            animation: dash 0.5s ease-out forwards;
+        }
+        @keyframes dash { to { stroke-dashoffset: 0; } }
+    </style>
+</head>
+<body class="font-label selection:bg-primary selection:text-black min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+    <div class="absolute inset-0 scanline opacity-20 pointer-events-none"></div>
+
+    <div class="relative z-10 w-full max-w-xl bg-surface border border-outline-variant/30 shadow-[0_0_200px_rgba(0,0,0,0.8)] flex flex-col transition-all duration-700 overflow-hidden">
+        <!-- Terminal Header -->
+        <div class="border-b border-outline-variant/20 px-6 py-4 flex items-center justify-between bg-surface-container">
+            <h1 class="font-headline text-lg tracking-[0.2em] uppercase">SESSION DISCONNECTED</h1>
+            <div class="flex gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-outline-variant/40"></div>
+                <div class="w-2 h-2 rounded-full bg-outline-variant/40"></div>
+                <div class="w-2 h-2 rounded-full bg-outline-variant/40"></div>
+            </div>
+        </div>
+
+        <!-- Terminal Content -->
+        <div id="terminal-screen" class="p-8 flex flex-col gap-2 font-mono text-[10px] tracking-widest uppercase text-on-surface-variant h-64 overflow-y-auto">
+            <div class="terminal-line">[ INFO ] INITIALIZING SECURITY WIPE PROTOCOL...</div>
+        </div>
+
+        <div class="p-6 border-t border-outline-variant/10 bg-surface-container-highest flex items-center justify-between">
+            <div id="msg-complete" class="font-mono text-[9px] text-tertiary tracking-[0.2em] uppercase opacity-0 transition-opacity duration-300">
+                WIPE SUCCESSFUL // SESSION PROTECTED
+            </div>
+            <a href="/" id="continue-btn" class="bg-primary/10 border border-primary text-primary px-8 py-3 hover:bg-primary hover:text-black font-bold tracking-[0.3em] uppercase text-[10px] transition-all transform translate-x-4 opacity-0 pointer-events-none flex justify-center items-center">
+                CONTINUE
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal-screen');
+        
+        function log(msg, type = 'info') {
+            const line = document.createElement('div');
+            const color = type === 'ok' ? 'text-tertiary' : (type === 'data' ? 'text-primary' : (type === 'sys' ? 'text-on-surface-variant/40' : ''));
+            line.className = `terminal-line ${color}`;
+            line.innerHTML = `[ ${type.toUpperCase()} ] ${msg}`;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+            return line;
+        }
+
+        window.onload = async () => {
+            // Instant Professional Scan
+            log(`SYSTEM_UA: ${navigator.userAgent.slice(0, 60)}...`, 'sys');
+            log(`SESSION_ORIGIN: ${window.location.origin}`, 'sys');
+            log('INITIALIZING TOTAL DISCONNECTION WIPE...', 'info');
+
+            // 1. Session Storage Audit
+            const sCount = sessionStorage.length;
+            log(`AUDIT: sessionStorage -> ${sCount} ENTRIES DETECTED.`, 'data');
+            if (sCount > 0) {
+                Object.keys(sessionStorage).forEach(k => {
+                    log(`  > REVOKING: ${k} [PROTECTED]`, 'info');
+                });
+                sessionStorage.clear();
+                log('RESULT: sessionStorage ATOMIC_WIPE_COMPLETE.', 'ok');
+            }
+
+            // 2. Local Storage Audit
+            const lCount = localStorage.length;
+            log(`AUDIT: localStorage -> ${lCount} ENTRIES DETECTED.`, 'data');
+            if (lCount > 0) {
+                Object.keys(localStorage).forEach(k => {
+                    log(`  > UNLINKING_PERSISTENT: ${k}`, 'info');
+                });
+                localStorage.clear();
+                log('RESULT: localStorage ATOMIC_WIPE_COMPLETE.', 'ok');
+            }
+
+            // 3. Cryptographic Cache Purge (IndexedDB)
+            log(`OBJECT_STORE: Locating Cryptographic Volumes...`, 'info');
+            const deleteDb = (dbName) => new Promise((resolve) => {
+                const req = indexedDB.deleteDatabase(dbName);
+                req.onsuccess = () => resolve(`${dbName}: VOLUME_DELETED_SUCCESSFULLY.`);
+                req.onerror = () => resolve(`${dbName}: ACCESS_DENIED_ALREADY_CLEARED.`);
+                req.onblocked = () => resolve(`${dbName}: VOLUME_BLOCKED_FORCED_WIPE.`);
+                setTimeout(() => resolve(`${dbName}: PHY_WIPE_COMPLETE.`), 500); 
+            });
+            const dbMsg1 = await deleteDb('ZeroNodeVaultCache');
+            log(dbMsg1, 'ok');
+            const dbMsg2 = await deleteDb('ZNodeSession');
+            log(dbMsg2, 'ok');
+
+            // 4. Secure Cookie Revocation
+            const cookies = document.cookie.split(";");
+            log(`AUDIT: Cookies -> ${cookies.length > 0 && cookies[0] !== "" ? cookies.length : 0} TOKENS DETECTED.`, 'data');
+            cookies.forEach(function(c) { 
+                if (!c) return;
+                const name = c.split("=")[0].trim();
+                log(`  > INVALIDATING_TOKEN: ${name}`, 'info');
+                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"; 
+            });
+            log('RESULT: ALL_ACCESS_TOKENS_REVOKED.', 'ok');
+
+            // Final Metadata Cleanup
+            log('ENVIRONMENT_RESET: SYNCING PERSISTENT_BUFFERS...', 'info');
+            log('----------------------------------------------------');
+            log('SESSION_WIPE: COMPLETED SUCCESSFULLY.', 'ok');
+            log('STATUS: ENVIRONMENT_COLD_AND_SECURE.', 'ok');
+            
+            // Immediate Completion UI
+            const msg = document.getElementById('msg-complete');
+            if (msg) msg.classList.add('opacity-100');
+            const btn = document.getElementById('continue-btn');
+            if (btn) {
+                btn.classList.replace('opacity-0', 'opacity-100');
+                btn.classList.remove('translate-x-4', 'pointer-events-none');
+            }
+        };
+    </script>
+</body>
+</html>

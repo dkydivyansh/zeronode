@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ZERONODE // BY DKYDIVYANSH.COM</title>
+<script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
+<script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary": "#9f9d9d",
+              "on-tertiary-fixed-variant": "#415275",
+              "secondary-fixed": "#e5e2e1",
+              "on-tertiary-container": "#37496b",
+              "tertiary-fixed": "#c2d4fe",
+              "on-secondary-container": "#c1bfbe",
+              "on-primary-fixed": "#3a4046",
+              "secondary-container": "#3c3b3b",
+              "on-tertiary-fixed": "#243657",
+              "on-primary": "#3a4147",
+              "error-container": "#7f2927",
+              "on-error-container": "#ff9993",
+              "outline": "#757575",
+              "tertiary-dim": "#b5c7f0",
+              "tertiary-fixed-dim": "#b5c7f0",
+              "surface-container-lowest": "#000000",
+              "surface-container-highest": "#262626",
+              "surface-dim": "#0e0e0e",
+              "on-tertiary": "#405275",
+              "inverse-on-surface": "#555555",
+              "background": "#000000",
+              "secondary-fixed-dim": "#d6d4d3",
+              "primary-fixed-dim": "#cfd5dd",
+              "on-secondary": "#202020",
+              "inverse-primary": "#596066",
+              "on-error": "#490106",
+              "surface-container": "#191919",
+              "on-primary-fixed-variant": "#565c63",
+              "surface": "#0e0e0e",
+              "primary-container": "#41474e",
+              "surface-bright": "#2c2c2c",
+              "surface-tint": "#c1c7cf",
+              "primary-fixed": "#dde3eb",
+              "tertiary-container": "#c2d4fe",
+              "surface-container-low": "#131313",
+              "inverse-surface": "#f9f9f9",
+              "error": "#ee7d77",
+              "secondary-dim": "#9f9d9d",
+              "on-background": "#e5e5e5",
+              "surface-variant": "#262626",
+              "primary-dim": "#b3b9c1",
+              "on-secondary-fixed-variant": "#5c5b5b",
+              "on-surface": "#e5e5e5",
+              "on-primary-container": "#cbd1d9",
+              "surface-container-high": "#1f1f1f",
+              "on-surface-variant": "#ababab",
+              "error-dim": "#bb5551",
+              "primary": "#c1c7cf",
+              "on-secondary-fixed": "#403f3f",
+              "outline-variant": "#484848",
+              "tertiary": "#d7e2ff"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"],
+              "mono": ["monospace"]
+            },
+            borderRadius: {"DEFAULT": "0", "lg": "0", "xl": "0", "full": "9999px"},
+          },
+        },
+      }
+</script>
+<style>
+        body {
+            background-color: #000000;
+            color: #E2E8F0;
+            overflow: hidden;
+            cursor: none;
+        }
+        * { cursor: none !important; }
+
+        @keyframes customFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-30px); }
+        }
+        @keyframes customSpin {
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes customSpinRev {
+            100% { transform: rotate(-360deg); }
+        }
+        @keyframes customPulse {
+            0%, 100% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 20px rgba(180, 198, 239, 0.4)); }
+            50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 50px rgba(180, 198, 239, 0.8)); }
+        }
+
+        .anim-float { animation: customFloat 6s ease-in-out infinite; }
+        .anim-spin-1 { animation: customSpin 20s linear infinite; }
+        .anim-spin-2 { animation: customSpinRev 30s linear infinite; }
+        .anim-spin-3 { animation: customSpin 15s linear infinite; }
+        .anim-pulse { animation: customPulse 5s ease-in-out infinite; }
+        @keyframes dataStream {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(200%); opacity: 0; }
+        }
+        .anim-data-stream { animation: dataStream 3s ease-in-out infinite; }
+        .anim-data-stream-delay { animation: dataStream 4s ease-in-out infinite 1.5s; opacity: 0; }
+        
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+            20%, 24%, 55% { opacity: 0.1; }
+        }
+        .anim-flicker { animation: flicker 7s infinite; }
+        
+        @keyframes glowText {
+            0%, 100% { text-shadow: 0 0 10px rgba(180, 198, 239, 0.2), 0 0 20px rgba(180, 198, 239, 0.1); }
+            50% { text-shadow: 0 0 20px rgba(180, 198, 239, 0.5), 0 0 30px rgba(180, 198, 239, 0.3); }
+        }
+        .anim-glow-text { animation: glowText 4s ease-in-out infinite; }
+
+        .wireframe-glow {
+            box-shadow: 0 0 40px rgba(180, 198, 239, 0.15);
+        }
+        .scanline {
+            background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
+            background-size: 100% 4px;
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-tertiary-fixed selection:text-on-tertiary-fixed">
+<!-- Background Elements -->
+<div class="fixed inset-0 z-0 pointer-events-none opacity-20 scanline"></div>
+<!-- Static Encrypted JSON Blocks -->
+<div class="fixed top-10 left-4 md:top-20 md:left-20 font-mono text-[8px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+<span class="scramble-text" data-original='{
+  "sys_id": "vx-901",
+  "auth_status": "pending",
+  "encryption": "AES-GCM"
+}'>{
+  "sys_id": "vx-901",
+  "auth_status": "pending",
+  "encryption": "AES-GCM"
+}</span>
+</div>
+<div class="fixed bottom-32 right-4 md:bottom-40 md:right-32 font-mono text-[8px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+<span class="scramble-text" data-original='{
+  "payload": "0x00A1F9",
+  "handshake": true,
+  "latency": "14ms"
+}'>{
+  "payload": "0x00A1F9",
+  "handshake": true,
+  "latency": "14ms"
+}</span>
+</div>
+<div class="fixed top-1/2 left-1/4 hidden md:block font-mono text-sm text-on-surface-variant/10 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+<span class="scramble-text" data-original='{
+  "NODE": "SINGULARITY",
+  "HASH": "f38a91c122e05d78"
+}'>{
+  "NODE": "SINGULARITY",
+  "HASH": "f38a91c122e05d78"
+}</span>
+</div>
+<!-- Hero Canvas -->
+<main class="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden">
+<!-- Subtle Ambient Data Streaks -->
+<div class="absolute left-4 md:left-10 top-1/4 h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant to-transparent overflow-hidden">
+    <div class="w-full h-1/3 bg-gradient-to-b from-transparent via-primary/50 to-transparent anim-data-stream"></div>
+</div>
+<div class="absolute right-4 md:right-10 bottom-1/4 h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant to-transparent overflow-hidden">
+    <div class="w-full h-1/3 bg-gradient-to-b from-transparent via-primary/50 to-transparent anim-data-stream-delay"></div>
+</div>
+<!-- Central Object -->
+<div id="parallax-wrapper" class="relative w-64 h-64 md:w-96 md:h-96 flex items-center justify-center mb-16 transition-transform duration-200 ease-out">
+<div class="relative w-full h-full flex items-center justify-center anim-float">
+<!-- Wireframe Core (Represented by CSS Shapes for Precision) -->
+<div class="absolute inset-0 border border-on-surface-variant/20 rotate-45 scale-75 wireframe-glow anim-spin-1"></div>
+<div class="absolute inset-0 border border-on-surface-variant/30 -rotate-12 scale-90 anim-spin-2"></div>
+<div class="absolute inset-0 border border-tertiary/20 rotate-180 anim-spin-3"></div>
+<!-- Floating Inner Prism -->
+<div class="relative w-32 h-32 md:w-48 md:h-48 border border-primary/40 flex items-center justify-center anim-pulse anim-spin-1">
+<div class="absolute inset-0 bg-tertiary/10 blur-3xl rounded-full"></div>
+<div class="w-2 h-2 bg-primary rounded-full animate-ping"></div>
+</div>
+</div>
+<!-- Decorative Coordinates -->
+<div class="absolute -top-12 left-0 font-label text-[10px] tracking-[0.3em] text-secondary anim-flicker">
+                LAT: <span id="dyn-lat">40.7128</span>° <span id="dyn-lat-dir">N</span>
+            </div>
+<div class="absolute -bottom-12 right-0 font-label text-[10px] tracking-[0.3em] text-secondary anim-flicker" style="animation-delay: 2s;">
+                LNG: <span id="dyn-lng">74.0060</span>° <span id="dyn-lng-dir">W</span>
+            </div>
+</div>
+<!-- Typography Stack -->
+<div class="text-center z-20">
+<h1 class="font-headline text-5xl md:text-8xl font-bold tracking-[0.25em] text-on-surface mb-4">
+                ZERONODE
+            </h1>
+<p class="font-label text-xs md:text-sm tracking-[0.5em] text-secondary uppercase mb-12">
+                THE SINGULARITY OF DATA
+            </p>
+<div class="flex flex-col items-center gap-8">
+<!-- Action -->
+<a href="/login" class="group relative px-12 py-4 border border-outline hover:border-primary transition-all duration-500 interactive-el">
+<span class="relative z-10 font-label text-xs tracking-[0.4em] text-primary group-hover:text-on-background">INITIALIZE</span>
+<div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
+</a>
+<!-- Technical Details -->
+<div class="flex flex-col items-center gap-2 opacity-60">
+<div class="flex items-center gap-4">
+<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+<span class="font-label text-[10px] tracking-widest text-on-surface-variant">SYSTEM_STATUS: STABLE</span>
+</div>
+</div>
+</div>
+</div>
+<!-- SHA-256 Floating Streams -->
+<div class="absolute left-4 bottom-24 md:left-8 md:bottom-32 flex flex-col gap-1 font-mono text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight z-[5] pointer-events-none mix-blend-screen opacity-50 md:opacity-100">
+<span class="scramble-text" data-original="F38A 91C1 22E0 5D78">F38A 91C1 22E0 5D78</span>
+<span class="scramble-text" data-original="AA90 221B CF74 8821">AA90 221B CF74 8821</span>
+<span class="scramble-text" data-original="B293 8EED 10CC 9192">B293 8EED 10CC 9192</span>
+<span class="scramble-text" data-original="44FA 1123 DDE9 2001">44FA 1123 DDE9 2001</span>
+</div>
+<div class="absolute right-4 top-24 md:right-8 md:top-32 flex flex-col gap-1 font-mono text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight text-right z-[5] pointer-events-none mix-blend-screen opacity-50 md:opacity-100">
+<span class="scramble-text" data-original="SHA-256 VERIFIED">SHA-256 VERIFIED</span>
+<span class="scramble-text" data-original="ENCRYPTION ACTIVE">ENCRYPTION ACTIVE</span>
+<span class="scramble-text" data-original="NODE_ID: SILENCE_01">NODE_ID: SILENCE_01</span>
+</div>
+</main>
+<!-- Footer: Mapped from Shared Components JSON -->
+<footer class="fixed bottom-0 w-full flex justify-between items-center px-8 py-6 w-full z-50 bg-transparent interactive-el">
+<!-- Logo/Brand Section -->
+<div class="font-['Noto_Serif'] text-lg text-slate-100">
+            ZERONODE
+        </div>
+<!-- Links/Metadata Section -->
+<div class="flex items-center gap-8 font-['Space_Grotesk'] text-[10px] tracking-widest uppercase">
+<div class="hidden md:flex gap-6 items-center">
+<span class="text-slate-500 hover:text-slate-200 transition-colors">ENCRYPTION: AES-256</span>
+<span class="text-slate-500 hover:text-slate-200 transition-colors">LATENCY: <span id="dyn-latency">14</span>MS</span>
+<span class="text-slate-100 font-bold">NODE: SINGULARITY</span>
+</div>
+<div class="text-slate-100 dark:text-slate-200 opacity-50">
+                ZERONODE // DKYDIVYANSH.COM // 2025
+            </div>
+</div>
+</footer>
+<!-- Side Overlays for "Vast Expanse" feel -->
+<div class="fixed top-0 bottom-0 left-0 w-24 bg-gradient-to-r from-background to-transparent z-0 pointer-events-none"></div>
+<div class="fixed top-0 bottom-0 right-0 w-24 bg-gradient-to-l from-background to-transparent z-0 pointer-events-none"></div>
+
+<!-- Custom Cursor & Logic -->
+<div id="custom-cursor" class="pointer-events-none fixed top-0 left-0 w-12 h-12 border border-primary/50 mix-blend-screen rounded-full z-[9999] transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-300 ease-out flex items-center justify-center will-change-transform">
+    <div class="w-2 h-2 bg-tertiary/50 rounded-full animate-ping"></div>
+</div>
+<div id="custom-cursor-dot" class="pointer-events-none fixed top-0 left-0 w-1.5 h-1.5 bg-primary rounded-full z-[10000] transform -translate-x-1/2 -translate-y-1/2 will-change-transform"></div>
+
+<script>
+    const cursor = document.getElementById('custom-cursor');
+    const cursorDot = document.getElementById('custom-cursor-dot');
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let cursorX = window.innerWidth / 2;
+    let cursorY = window.innerHeight / 2;
+    
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        cursorDot.style.left = `${mouseX}px`;
+        cursorDot.style.top = `${mouseY}px`;
+    });
+    
+    function animateCursor() {
+        cursorX += (mouseX - cursorX) * 0.12;
+        cursorY += (mouseY - cursorY) * 0.12;
+        cursor.style.left = `${cursorX}px`;
+        cursor.style.top = `${cursorY}px`;
+        requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    const interactives = document.querySelectorAll('button, a, .interactive-el');
+    interactives.forEach(el => {
+        el.addEventListener('mouseenter', () => {
+            cursor.classList.add('scale-[2.5]', 'bg-primary/20', 'border-primary');
+            cursor.classList.remove('border-primary/50');
+        });
+        el.addEventListener('mouseleave', () => {
+            cursor.classList.remove('scale-[2.5]', 'bg-primary/20', 'border-primary');
+            cursor.classList.add('border-primary/50');
+        });
+    });
+    
+    // Parallax on mouse move for the central object
+    const parallaxWrapper = document.getElementById('parallax-wrapper');
+    document.addEventListener('mousemove', (e) => {
+        const x = (e.clientX / window.innerWidth - 0.5) * 30;
+        const y = (e.clientY / window.innerHeight - 0.5) * 30;
+        if(parallaxWrapper) {
+            parallaxWrapper.style.transform = `translate(${x}px, ${y}px)`;
+        }
+    });
+
+    // Scramble text effect
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
+    const scrambles = document.querySelectorAll('.scramble-text');
+    scrambles.forEach(el => {
+        let isScrambling = false;
+        setInterval(() => {
+            if (isScrambling || el.hasAttribute('data-transitioning')) return;
+            const original = el.getAttribute('data-original');
+            // Randomly start scrambling
+            if (Math.random() < 0.15) {
+                isScrambling = true;
+                let scramblesCount = 0;
+                const scrambleInterval = setInterval(() => {
+                    el.innerText = original.split('').map(char => {
+                        if (char.match(/[\s:\-{},"]/)) return char;
+                        return Math.random() < 0.7 ? chars[Math.floor(Math.random() * chars.length)] : char;
+                    }).join('');
+                    scramblesCount++;
+                    if (scramblesCount > 8) {
+                        clearInterval(scrambleInterval);
+                        el.innerText = original;
+                        isScrambling = false;
+                    }
+                }, 40);
+            }
+        }, 100);
+    });
+
+    // Dynamically Swap JSON Blocks
+    const generatePayload = () => {
+        const payloads = [
+            { session: "0x" + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), hash: "45TH", blocks: [Math.floor(Math.random()*10), Math.floor(Math.random()*10)], active: true },
+            { token: btoa(Math.random().toString()).substr(0,8), cx: { ip: "192.168.1." + Math.floor(Math.random()*255), pt: [443, 80][Math.floor(Math.random()*2)] }, mode: "stealth" },
+            { sys: "ZERONODE_V" + Math.floor(Math.random()*10), keys: [{"rsa":"comp"},{"aes":"sec"}], ts: Date.now() },
+            { tgt: "alpha_node", drop: Math.floor(Math.random()*100), meta: {"reg":"us-east","lat": Math.floor(Math.random()*40) + "ms"} },
+            { payload: "SECURE_HANDSHAKE", status: 200, sig: btoa(Math.random().toString()).substr(0,16) }
+        ];
+        return JSON.stringify(payloads[Math.floor(Math.random()*payloads.length)], null, 2);
+    };
+
+    setInterval(() => {
+        const jsonBlocks = Array.from(scrambles).filter(el => {
+            const txt = el.getAttribute('data-original');
+            return txt && txt.includes('{') && !el.hasAttribute('data-transitioning');
+        });
+        
+        if (jsonBlocks.length > 0) {
+            const target = jsonBlocks[Math.floor(Math.random() * jsonBlocks.length)];
+            const newJson = generatePayload();
+            
+            target.setAttribute('data-transitioning', 'true');
+            const originalText = target.innerText;
+            
+            let wipes = 0;
+            const wipeInterval = setInterval(() => {
+                target.innerText = originalText.split('').map(char => {
+                    if (char === '\n' || char === ' ') return char; // keep block shape
+                    return chars[Math.floor(Math.random() * chars.length)];
+                }).join('');
+                
+                wipes++;
+                if (wipes > 15) { // approx 450ms of rapid pure violent scramble
+                    clearInterval(wipeInterval);
+                    target.setAttribute('data-original', newJson);
+                    target.innerText = newJson; // Snap to the clean new object
+                    target.removeAttribute('data-transitioning');
+                }
+            }, 30);
+        }
+    }, 2000);
+
+    // Randomize Coordinates
+    const dynLat = document.getElementById('dyn-lat');
+    const dynLatDir = document.getElementById('dyn-lat-dir');
+    const dynLng = document.getElementById('dyn-lng');
+    const dynLngDir = document.getElementById('dyn-lng-dir');
+
+    setInterval(() => {
+        if(dynLat && dynLatDir) {
+            const lat = (Math.random() * 90).toFixed(4);
+            dynLat.innerText = lat;
+            dynLatDir.innerText = Math.random() > 0.5 ? 'N' : 'S';
+        }
+    }, 2000);
+
+    setInterval(() => {
+        if(dynLng && dynLngDir) {
+            const lng = (Math.random() * 180).toFixed(4);
+            dynLng.innerText = lng;
+            dynLngDir.innerText = Math.random() > 0.5 ? 'E' : 'W';
+        }
+    }, 3200);
+
+    // Live Latency Simulation
+    setInterval(() => {
+        const dynLatency = document.getElementById('dyn-latency');
+        if(dynLatency) {
+            const ping = Math.floor(Math.random() * (35 - 8 + 1) + 8);
+            dynLatency.innerText = ping;
+        }
+    }, 1000);
+
+    
+</script>
+</body></html>

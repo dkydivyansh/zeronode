@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ZERONODE // INITIALIZATION</title>
+<script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
+<script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error": "#490106",
+              "surface-container": "#191919",
+              "error-dim": "#bb5551",
+              "surface-tint": "#c1c7cf",
+              "tertiary-fixed": "#c2d4fe",
+              "on-tertiary-fixed": "#243657",
+              "on-secondary-fixed": "#403f3f",
+              "secondary": "#9f9d9d",
+              "background": "#0e0e0e",
+              "on-surface": "#e5e5e5",
+              "secondary-dim": "#9f9d9d",
+              "on-error-container": "#ff9993",
+              "secondary-fixed-dim": "#d6d4d3",
+              "on-primary-fixed-variant": "#565c63",
+              "error-container": "#7f2927",
+              "on-secondary-container": "#c1bfbe",
+              "on-secondary": "#202020",
+              "primary-fixed-dim": "#cfd5dd",
+              "surface-bright": "#2c2c2c",
+              "surface-container-highest": "#262626",
+              "secondary-fixed": "#e5e2e1",
+              "surface-container-high": "#1f1f1f",
+              "outline-variant": "#484848",
+              "primary-fixed": "#dde3eb",
+              "tertiary-fixed-dim": "#b5c7f0",
+              "tertiary": "#d7e2ff",
+              "surface-variant": "#262626",
+              "surface-dim": "#0e0e0e",
+              "surface": "#0e0e0e",
+              "inverse-on-surface": "#555555",
+              "on-tertiary": "#405275",
+              "on-primary-fixed": "#3a4046",
+              "on-primary": "#3a4147",
+              "on-secondary-fixed-variant": "#5c5b5b",
+              "surface-container-lowest": "#000000",
+              "primary": "#c1c7cf",
+              "inverse-surface": "#f9f9f9",
+              "primary-dim": "#b3b9c1",
+              "inverse-primary": "#596066",
+              "error": "#ee7d77",
+              "tertiary-dim": "#b5c7f0",
+              "on-background": "#e5e5e5",
+              "tertiary-container": "#c2d4fe",
+              "on-tertiary-container": "#37496b",
+              "secondary-container": "#3c3b3b",
+              "primary-container": "#41474e",
+              "on-primary-container": "#cbd1d9",
+              "surface-container-low": "#131313",
+              "on-surface-variant": "#ababab",
+              "outline": "#757575",
+              "on-tertiary-fixed-variant": "#415275"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"]
+            },
+            borderRadius: {"DEFAULT": "0", "lg": "0", "xl": "0", "full": "9999px"},
+          },
+        },
+      }
+</script>
+<style>.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }
+body {
+    background-color: #000;
+    overflow: hidden
+    }
+
+
+    body {
+        cursor: none;
+    }
+    * { cursor: none !important; }
+
+    @keyframes customFloat {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-30px); }
+    }
+    @keyframes customSpin {
+        100% { transform: rotate(360deg); }
+    }
+    @keyframes customSpinRev {
+        100% { transform: rotate(-360deg); }
+    }
+    @keyframes customPulse {
+        0%, 100% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 20px rgba(180, 198, 239, 0.4)); }
+        50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 50px rgba(180, 198, 239, 0.8)); }
+    }
+
+    .anim-float { animation: customFloat 6s ease-in-out infinite; }
+    .anim-spin-1 { animation: customSpin 20s linear infinite; }
+    .anim-spin-2 { animation: customSpinRev 30s linear infinite; }
+    .anim-spin-3 { animation: customSpin 15s linear infinite; }
+    .anim-pulse { animation: customPulse 5s ease-in-out infinite; }
+    @keyframes dataStream {
+        0% { transform: translateY(-100%); opacity: 0; }
+        50% { opacity: 1; }
+        100% { transform: translateY(200%); opacity: 0; }
+    }
+    .anim-data-stream { animation: dataStream 3s ease-in-out infinite; }
+    .anim-data-stream-delay { animation: dataStream 4s ease-in-out infinite 1.5s; opacity: 0; }
+    
+    .scanline {
+        background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
+        background-size: 100% 4px;
+    }
+</style>
+</head>
+<body class="font-body text-on-surface selection:bg-primary selection:text-on-primary">
+
+<!-- Custom Cursor -->
+<div id="custom-cursor" class="fixed top-0 left-0 w-8 h-8 rounded-full border border-primary/50 pointer-events-none z-[100] -translate-x-1/2 -translate-y-1/2 transition-all duration-150 ease-out flex items-center justify-center mix-blend-screen overflow-hidden">
+    <div class="w-1 h-1 bg-primary rounded-full shadow-[0_0_10px_#c1c7cf]"></div>
+</div>
+
+<!-- Background Elements -->
+<div class="fixed inset-0 z-0 pointer-events-none opacity-20 scanline"></div>
+
+
+
+
+<main class="relative min-h-screen flex items-center justify-center bg-black overflow-hidden px-4">
+
+<!-- Central Vault Core Container -->
+<div class="relative z-10 flex flex-col items-center max-w-xl w-full">
+<!-- Error Display -->
+<div id="auth-error" class="hidden mb-6 px-6 py-3 border border-error/30 bg-error/5 max-w-sm text-center">
+    <p class="font-label text-[10px] text-error tracking-wider"></p>
+</div>
+<!-- Action Area -->
+<div class="w-full space-y-8 flex flex-col items-center">
+<a href="/auth/login" class="group relative px-12 py-4 border border-outline hover:border-primary transition-all duration-500 interactive-el">
+<span class="relative z-10 font-label text-xs tracking-[0.4em] text-primary group-hover:text-on-background">AUTH WITH DKYDIVYANSH SSO</span>
+<div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
+</a>
+<div class="max-w-xs text-center">
+<p class="font-label text-[10px] text-slate-400 tracking-wider leading-relaxed">
+                        WHITELIST REQUIRED FOR ACCESS. INITIALIZATION DENIED FOR UNLISTED NODES.
+                    </p>
+</div>
+</div>
+
+</div>
+<script>
+    // Show auth errors from redirect params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error')) {
+        const el = document.getElementById('auth-error');
+        el.classList.remove('hidden');
+        el.querySelector('p').textContent = (params.get('msg') || params.get('error')).toUpperCase();
+    }
+</script>
+</main>
+<!-- Footer: same as home page -->
+<footer class="fixed bottom-0 w-full flex justify-between items-center px-8 py-6 z-50 bg-transparent">
+<div class="font-headline text-lg text-slate-100">
+    ZERONODE
+</div>
+<div class="flex items-center gap-8 font-label text-[10px] tracking-widest uppercase">
+    <div class="hidden md:flex gap-6 items-center">
+        <span class="text-slate-500">ENCRYPTION: AES-256</span>
+        <span class="text-slate-500">PROTOCOL: SSO</span>
+        <span class="text-slate-100 font-bold">NODE: SINGULARITY</span>
+    </div>
+    <div class="text-slate-100 opacity-50">
+        ZERONODE // DKYDIVYANSH.COM // 2025
+    </div>
+</div>
+</footer>
+</body>
+<div id="custom-cursor-dot" class="pointer-events-none fixed top-0 left-0 w-1.5 h-1.5 bg-primary rounded-full z-[10000] transform -translate-x-1/2 -translate-y-1/2 will-change-transform"></div>
+
+<script>
+    const cursor = document.getElementById('custom-cursor');
+    const cursorDot = document.getElementById('custom-cursor-dot');
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let cursorX = window.innerWidth / 2;
+    let cursorY = window.innerHeight / 2;
+    
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        cursorDot.style.left = `${mouseX}px`;
+        cursorDot.style.top = `${mouseY}px`;
+    });
+    
+    function animateCursor() {
+        cursorX += (mouseX - cursorX) * 0.12;
+        cursorY += (mouseY - cursorY) * 0.12;
+        cursor.style.left = `${cursorX}px`;
+        cursor.style.top = `${cursorY}px`;
+        requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    const interactives = document.querySelectorAll('button, a, .interactive-el');
+    interactives.forEach(el => {
+        el.addEventListener('mouseenter', () => {
+            cursor.classList.add('scale-[2.5]', 'bg-primary/20', 'border-primary');
+            cursor.classList.remove('border-primary/50');
+        });
+        el.addEventListener('mouseleave', () => {
+            cursor.classList.remove('scale-[2.5]', 'bg-primary/20', 'border-primary');
+            cursor.classList.add('border-primary/50');
+        });
+    });
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
+    const scrambles = document.querySelectorAll('.scramble-text');
+    scrambles.forEach(el => {
+        let isScrambling = false;
+        setInterval(() => {
+            if (isScrambling || el.hasAttribute('data-transitioning')) return;
+            const original = el.getAttribute('data-original');
+            if (Math.random() < 0.15) {
+                isScrambling = true;
+                let scramblesCount = 0;
+                const scrambleInterval = setInterval(() => {
+                    el.innerText = original.split('').map(char => {
+                        if (char.match(/[\s:\-{},"]/)) return char;
+                        return Math.random() < 0.7 ? chars[Math.floor(Math.random() * chars.length)] : char;
+                    }).join('');
+                    scramblesCount++;
+                    if (scramblesCount > 8) {
+                        clearInterval(scrambleInterval);
+                        el.innerText = original;
+                        isScrambling = false;
+                    }
+                }, 40);
+            }
+        }, 100);
+    });
+
+    const generatePayload = () => {
+        const payloads = [
+            { session: "0x" + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), hash: "45TH", blocks: [Math.floor(Math.random()*10), Math.floor(Math.random()*10)], active: true },
+            { token: btoa(Math.random().toString()).substr(0,8), cx: { ip: "192.168.1." + Math.floor(Math.random()*255), pt: [443, 80][Math.floor(Math.random()*2)] }, mode: "stealth" },
+            { sys: "ZERONODE_V" + Math.floor(Math.random()*10), keys: [{"rsa":"comp"},{"aes":"sec"}], ts: Date.now() },
+            { tgt: "alpha_node", drop: Math.floor(Math.random()*100), meta: {"reg":"us-east","lat": Math.floor(Math.random()*40) + "ms"} },
+            { payload: "SECURE_HANDSHAKE", status: 200, sig: btoa(Math.random().toString()).substr(0,16) }
+        ];
+        return JSON.stringify(payloads[Math.floor(Math.random()*payloads.length)], null, 2);
+    };
+
+    setInterval(() => {
+        const jsonBlocks = Array.from(scrambles).filter(el => {
+            const txt = el.getAttribute('data-original');
+            return txt && txt.includes('{') && !el.hasAttribute('data-transitioning');
+        });
+        
+        if (jsonBlocks.length > 0) {
+            const target = jsonBlocks[Math.floor(Math.random() * jsonBlocks.length)];
+            const newJson = generatePayload();
+            
+            target.setAttribute('data-transitioning', 'true');
+            const originalText = target.innerText;
+            
+            let wipes = 0;
+            const wipeInterval = setInterval(() => {
+                target.innerText = originalText.split('').map(char => {
+                    if (char === '\n' || char === ' ') return char;
+                    return chars[Math.floor(Math.random() * chars.length)];
+                }).join('');
+                
+                wipes++;
+                if (wipes > 15) {
+                    clearInterval(wipeInterval);
+                    target.setAttribute('data-original', newJson);
+                    target.innerText = newJson;
+                    target.removeAttribute('data-transitioning');
+                }
+            }, 30);
+        }
+    }, 2000);
+</script>
+</html>

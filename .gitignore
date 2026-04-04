@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment — NEVER commit these
+.env
+
+# Database — local only
+server_data.db
+
+# Node (in case npm is used temporarily)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User Encrypted Data
+data/

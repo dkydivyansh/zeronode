@@ -1,0 +1,138 @@
+{% extends "shell.html" %}
+{% block title %}HOME{% endblock %}
+
+{% block content %}
+
+{% set session_remaining = user.session_expires_at - now_ts if user.session_expires_at else 0 %}
+{% set hours_left = (session_remaining // 3600) %}
+{% set mins_left = ((session_remaining % 3600) // 60) %}
+
+{# Mask the email: show first 2 chars + *** + last char before @ + domain #}
+{% set email_parts = user.email.split('@') %}
+{% set local = email_parts[0] %}
+{% set domain = email_parts[1] if email_parts|length > 1 else '' %}
+{% set masked_email = local[:2] ~ '***' ~ local[-1:] ~ '@' ~ domain if local|length > 3 else local[:1] ~ '***@' ~ domain %}
+
+<div class="px-8 pt-12">
+    <!-- Welcome -->
+    <div class="mb-12">
+        <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
+            Welcome, {{ user.first_name }}.
+        </h1>
+        <p class="font-label text-xs tracking-[0.3em] text-on-surface-variant/60 uppercase">
+            SESSION ACTIVE // SCOPE: {{ user.scope | upper }}
+        </p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+
+        <!-- Vault Storage -->
+        <div class="border border-outline-variant/20 p-6 bg-surface-container/50">
+            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-3">VAULT STORAGE</p>
+            <div class="flex items-baseline gap-2 mb-1">
+                {% if vault_stats.total_bytes < 1024 %}
+                <span class="font-headline text-2xl text-on-surface">{{ vault_stats.total_bytes }}</span>
+                <span class="font-label text-[10px] text-on-surface-variant/50">BYTES</span>
+                {% elif vault_stats.total_bytes < 1048576 %}
+                <span class="font-headline text-2xl text-on-surface">{{ "%.1f"|format(vault_stats.total_bytes / 1024) }}</span>
+                <span class="font-label text-[10px] text-on-surface-variant/50">KB</span>
+                {% elif vault_stats.total_bytes < 1073741824 %}
+                <span class="font-headline text-2xl text-on-surface">{{ "%.2f"|format(vault_stats.total_bytes / 1048576) }}</span>
+                <span class="font-label text-[10px] text-on-surface-variant/50">MB</span>
+                {% else %}
+                <span class="font-headline text-2xl text-on-surface">{{ "%.2f"|format(vault_stats.total_bytes / 1073741824) }}</span>
+                <span class="font-label text-[10px] text-on-surface-variant/50">GB</span>
+                {% endif %}
+            </div>
+            <p class="font-label text-[10px] text-on-surface-variant/40">Encrypted on disk</p>
+        </div>
+
+        <!-- File Count -->
+        <div class="border border-outline-variant/20 p-6 bg-surface-container/50">
+            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-3">ENCRYPTED FILES</p>
+            <div class="flex items-baseline gap-2 mb-1">
+                <span class="font-headline text-2xl text-on-surface">{{ vault_stats.file_count }}</span>
+                <span class="font-label text-[10px] text-on-surface-variant/50">{{ 'FILE' if vault_stats.file_count == 1 else 'FILES' }}</span>
+            </div>
+            <p class="font-label text-[10px] text-on-surface-variant/40">AES-256-GCM wrapped</p>
+        </div>
+
+        <!-- Session Timeout -->
+        <div class="border border-outline-variant/20 p-6 bg-surface-container/50">
+            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-3">SESSION EXPIRES</p>
+            <div class="flex items-baseline gap-2 mb-1">
+                {% if session_remaining > 0 %}
+                <span class="font-headline text-2xl text-on-surface">{{ hours_left }}h {{ mins_left }}m</span>
+                {% else %}
+                <span class="font-headline text-2xl text-error">EXPIRED</span>
+                {% endif %}
+            </div>
+            <p class="font-label text-[10px] text-on-surface-variant/40">24-hour rolling window</p>
+        </div>
+
+    </div>
+
+    <!-- Widgets Container -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start pb-12">
+        
+        <!-- Identity Card -->
+        <div class="border border-outline-variant/20 p-8 bg-surface-container/30 h-full">
+            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-6">AUTHENTICATED IDENTITY</p>
+            <div class="flex items-start gap-6">
+                <!-- Avatar -->
+                <img src="{{ user.profile_photo }}" alt="{{ user.first_name }}"
+                     class="w-16 h-16 rounded-full border border-outline-variant/30 object-cover flex-shrink-0"/>
+                <!-- Details -->
+                <div class="grid grid-cols-2 gap-y-4 gap-x-8 flex-1">
+                    <div>
+                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">NAME</p>
+                        <p class="font-label text-sm text-on-surface">{{ user.first_name }} {{ user.last_name }}</p>
+                    </div>
+                    <div>
+                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">EMAIL</p>
+                        <p class="font-label text-sm text-on-surface">{{ masked_email }}</p>
+                    </div>
+                    <div>
+                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">USER ID</p>
+                        <p class="font-mono text-[11px] text-on-surface-variant/60">{{ user.user_id }}</p>
+                    </div>
+                    <div>
+                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">SESSION TTL</p>
+                        {% if session_remaining > 0 %}
+                        <p class="font-mono text-[11px] text-on-surface-variant/60">{{ hours_left }}h {{ mins_left }}m remaining</p>
+                        {% else %}
+                        <p class="font-mono text-[11px] text-error">Session expired</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Drive Shortcut Widget -->
+        <a href="/app/drive" class="border border-outline-variant/20 p-8 bg-surface-container/30 group hover:border-primary/40 transition-all duration-500 h-full flex flex-col justify-between interactive-el group">
+            <div>
+                <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-6 uppercase">Quick Access</p>
+                <div class="flex items-center gap-6">
+                    <div class="w-16 h-16 bg-primary/5 border border-primary/20 flex items-center justify-center group-hover:bg-primary/10 group-hover:border-primary/40 transition-all duration-700">
+                        <svg class="w-8 h-8 text-primary/60 group-hover:text-primary transition-all duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="font-headline text-xl tracking-widest text-on-surface uppercase mb-1">ZERONODE DRIVE</h2>
+                        <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase">Encrypted Storage Vault</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex justify-end">
+                <div class="font-label text-[10px] tracking-widest text-primary border border-primary/20 px-6 py-3 group-hover:bg-primary group-hover:text-black transition-all duration-500 uppercase font-bold">
+                    Open Vault
+                </div>
+            </div>
+        </a>
+
+    </div>
+</div>
+{% endblock %}

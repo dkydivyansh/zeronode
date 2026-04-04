@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+<title>ZERONODE // {% block title %}VAULT{% endblock %}</title>
+<script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
+<script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary": "#9f9d9d",
+              "outline": "#757575",
+              "background": "#000000",
+              "on-background": "#e5e5e5",
+              "surface": "#0e0e0e",
+              "surface-container": "#191919",
+              "surface-container-high": "#1f1f1f",
+              "surface-container-highest": "#262626",
+              "surface-variant": "#262626",
+              "on-surface": "#e5e5e5",
+              "on-surface-variant": "#ababab",
+              "primary": "#c1c7cf",
+              "primary-dim": "#b3b9c1",
+              "on-primary": "#3a4147",
+              "outline-variant": "#484848",
+              "tertiary": "#19ff6b",
+              "accent": "#d7e2ff",
+              "error": "#ee7d77"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"],
+              "mono": ["monospace"]
+            },
+            borderRadius: {"DEFAULT": "0", "lg": "0", "xl": "0", "full": "9999px"},
+          },
+        },
+      }
+</script>
+<style>
+    body {
+        background-color: #000;
+        color: #e5e5e5;
+    }
+    .scanline {
+        background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
+        background-size: 100% 4px;
+    }
+</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+<script src="{{ url_for('static', filename='js/wordlist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pdf.min.js') }}"></script>
+<script>
+    window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+    if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "{{ url_for('static', filename='js/pdf.worker.min.js') }}";
+    }
+</script>
+</head>
+<body class="font-body selection:bg-primary selection:text-on-primary min-h-screen">
+
+<!-- Session Vault Overlay (Unskippable Glassmorphism Gateway) -->
+<div id="vault-overlay">
+    <div class="vault-modal flex flex-col gap-6">
+        <div>
+            <h1 id="vault-title" class="font-headline text-3xl tracking-widest text-[#e5e5e5] glitch-text uppercase mb-2">SYSTEM INITIALIZATION</h1>
+            <p id="vault-subtitle" class="font-label text-xs text-[#a0a0a0] tracking-wider uppercase">Validating secure session context...</p>
+        </div>
+
+        <!-- Wizard Step 0: Security Audit -->
+        <div id="vault-step-0" class="flex flex-col gap-4">
+            <div id="security-check-list" class="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 font-mono text-[9px] tracking-widest leading-none">
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-crypto">
+                    <span>> CRYPTOGRAPHIC_CORE_SUBSYSTEM</span>
+                    <span class="status text-primary">SCNG...</span>
+                </div>
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-algos">
+                    <span>> CIPHER_SUITE_STRENGTH_TEST</span>
+                    <span class="status text-primary">WAIT...</span>
+                </div>
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-storage">
+                    <span>> PERSISTENCE_RELIABILITY_VECTOR</span>
+                    <span class="status text-primary">WAIT...</span>
+                </div>
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-context">
+                    <span>> SECURE_CONTEXT_VALIDATION</span>
+                    <span class="status text-primary">WAIT...</span>
+                </div>
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-isolation">
+                    <span>> ARCHITECTURAL_PROCESS_ISOLATION</span>
+                    <span class="status text-primary">WAIT...</span>
+                </div>
+                <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-behavior">
+                    <span>> ENVIRONMENTAL_FORENSIC_AUDIT</span>
+                    <span class="status text-primary">WAIT...</span>
+                </div>
+            </div>
+            <div id="audit-feedback" class="font-label text-[10px] text-on-surface-variant/40 uppercase tracking-widest text-center mt-2">INITIALIZING DEEP SYSTEM SCAN...</div>
+        </div>
+        
+        <!-- Wizard Step 1: Input -->
+        <div id="vault-step-1" class="flex-col gap-3 hidden">
+            <!-- Environment Trust Advisory -->
+            <div class="mb-4 p-4 border-l-2 border-primary/20 bg-primary/5 flex flex-col gap-2">
+                <span class="font-mono text-[9px] text-primary tracking-widest uppercase opacity-60">SECURITY_ADVISORY</span>
+                <p class="font-label text-[10px] text-on-surface-variant/80 leading-relaxed tracking-wide">
+                    ZeroNode executes all cryptographic operations within the <b>local browser context</b>. Ensure this environment is trusted and free of unauthorized monitoring. Data exposure resulting from hardware compromise or insecure terminals remains the sole liability of the user.
+                </p>
+            </div>
+            
+            <input id="vault-pw" type="password" class="vault-input" placeholder="MASTER PASSWORD" />
+            <input id="vault-confirm-pw" type="password" class="vault-input" placeholder="CONFIRM PASSWORD" style="display:none;" />
+            <div id="vault-error" class="text-error font-label text-xs h-4"></div>
+            <a href="#" id="vault-forgot-pw" class="font-label text-xs tracking-widest text-[#a0a0a0] hover:text-primary transition-colors mt-2" style="display:none;">[FORGOT CREDENTIALS? RECOVER WITH SEED]</a>
+        </div>
+
+        <!-- Wizard Step 2: Key Preview -->
+        <div id="vault-step-2" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-primary mb-2">✔ New key pair generated and encrypted.</p>
+            <textarea id="vault-key-preview" class="vault-input font-mono text-[10px] h-32 resize-none" readonly></textarea>
+            <p class="font-label text-[10px] text-[#a0a0a0] mt-2">These encrypted keys will be backed up to your ZeroNode cloud profile.</p>
+        </div>
+
+        <!-- Wizard Step 3: Secure Phrase Setup -->
+        <div id="vault-step-3" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-error mb-2 leading-relaxed">CRITICAL: If you lose your password, these 12 words are the ONLY way to recover your vault. Write them down offline.</p>
+            <div class="p-3 bg-surface border border-outline-variant/30 text-[#e5e5e5]">
+                <p id="vault-recovery-phrase" class="font-mono text-[13px] tracking-wider leading-loose break-words select-all"></p>
+            </div>
+            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Select and copy, or write on physical paper.</p>
+        </div>
+
+        <!-- Wizard Step 4: Backup Details (Final) -->
+        <div id="vault-step-4" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">Your Vault is initialized. You must download a local offline backup of your keys as an emergency archive to continue.</p>
+            <button id="vault-manual-dl-btn" class="w-full bg-primary/10 border border-primary text-primary flex justify-center items-center hover:bg-primary hover:text-black font-label text-xs tracking-widest py-3 uppercase transition-colors interactive-el mb-2">▼ DOWNLOAD VAULT ARCHIVE</button>
+        </div>
+
+        <!-- Recovery Wizard Step 1: Input -->
+        <div id="vault-recovery-step-1" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-primary mb-2">Enter your OLD 12-word recovery phrase (space-separated).</p>
+            <textarea id="vault-recovery-input" class="vault-input font-mono text-[12px] h-24 resize-none" placeholder="word1 word2 word3..."></textarea>
+            <input id="vault-recovery-new-pw" type="password" class="vault-input mt-2" placeholder="NEW MASTER PASSWORD" />
+            <div id="vault-recovery-error" class="text-error font-label text-[10px] h-4"></div>
+        </div>
+
+        <!-- Recovery Wizard Step 2: New Phrase -->
+        <div id="vault-recovery-step-2" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-error mb-2 leading-relaxed">CRITICAL: Your old seed phrase has been voided. This is your NEW 12-word recovery phrase. Write it down offline.</p>
+            <div class="p-3 bg-surface border border-outline-variant/30 text-[#e5e5e5]">
+                <p id="vault-recovery-new-phrase" class="font-mono text-[13px] tracking-wider leading-loose break-words select-all"></p>
+            </div>
+            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Select and copy, or write on physical paper.</p>
+        </div>
+
+        <!-- Recovery Wizard Step 3: Archive -->
+        <div id="vault-recovery-step-3" class="flex-col gap-3 hidden">
+            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">System parameters rotated successfully. You must download a new local offline backup of your keys to proceed.</p>
+            <button id="vault-recovery-manual-dl-btn" class="w-full bg-primary/10 border border-primary text-primary flex justify-center items-center hover:bg-primary hover:text-black font-label text-xs tracking-widest py-3 uppercase transition-colors interactive-el mb-2">▼ DOWNLOAD RECOVERY ARCHIVE</button>
+        </div>
+
+        <button id="vault-submit-btn" class="vault-btn relative flex justify-center interactive-el mt-2">
+            <span class="vault-btn-text">PLEASE WAIT</span>
+            <div class="vault-spinner"></div>
+        </button>
+        <button id="vault-back-btn" class="font-label text-xs tracking-widest text-on-surface-variant/40 hover:text-primary transition-colors interactive-el py-2 hidden uppercase">[ RETURN TO PREVIOUS ]</button>
+    </div>
+</div>
+
+<!-- Scanline -->
+<div class="fixed inset-0 z-0 pointer-events-none opacity-20 scanline"></div>
+
+<!-- Content Canvas -->
+<main class="relative z-10 min-h-screen pb-20">
+    {% block content %}{% endblock %}
+</main>
+
+<!-- Transfer Manager Overlay -->
+<div id="transfer-manager" style="display: none;" class="fixed bottom-24 right-8 w-80 bg-surface-container-high border border-outline-variant/30 backdrop-blur-md z-[60] flex flex-col shadow-2xl">
+    <!-- Header (Click to minimize) -->
+    <div id="tm-header" class="px-4 py-3 border-b border-outline-variant/30 flex justify-between items-center cursor-pointer hover:bg-surface-variant transition-colors">
+        <div class="flex items-center gap-2">
+            <span class="font-headline text-xs tracking-widest text-[#e5e5e5] uppercase">Active Transfers</span>
+            <span id="tm-badge" class="bg-primary text-on-primary text-[9px] font-mono px-2 py-0.5 rounded-full">0</span>
+        </div>
+        <button id="tm-toggle-btn" class="text-on-surface-variant hover:text-primary transition-colors">
+            <svg class="w-4 h-4 transform rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+    </div>
+    
+    <!-- Body List -->
+    <div id="tm-body" style="max-height: 0px;" class="overflow-y-auto w-full p-0 flex flex-col transition-all duration-300">
+        <!-- Persistent Sections -->
+        <div id="tm-active-list" class="flex flex-col"></div>
+        <div id="tm-queued-list" class="flex flex-col"></div>
+        <div id="tm-failed-list" class="flex flex-col border-t border-error/5"></div>
+        <div id="tm-completed-list" class="flex flex-col border-t border-outline-variant/10 bg-tertiary/10"></div>
+    </div>
+</div>
+
+<!-- Bottom Navigation (Global) -->
+<footer class="fixed bottom-0 w-full flex justify-between items-center px-8 py-5 z-50 bg-black/90 backdrop-blur-sm border-t border-outline-variant/20">
+    
+    <!-- Left Side: System Navigation -->
+    <div class="flex items-center gap-8">
+        <a href="/" class="font-headline text-lg text-on-surface tracking-widest interactive-el">ZERONODE</a>
+        <nav class="hidden md:flex items-center gap-6">
+            {% for mod_id, mod in app_modules.items() %}
+            <a href="/app/{{ mod_id }}" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-on-surface transition-colors uppercase interactive-el {% if module_name == mod_id %}text-on-surface{% endif %}">{{ mod.name }}</a>
+            {% endfor %}
+            <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-error transition-colors uppercase interactive-el text-error">Logout</a>
+
+            <!-- Global Cache Status (Internal to Nav) -->
+            <button id="dynamic-cache" class="font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase ml-4">CACHE [0]</button>
+        </nav>
+    </div>
+
+    <!-- Right Side: Dynamic Context & Identity -->
+    <div class="flex items-center gap-6">
+        
+        <!-- Module-Specific Action Area -->
+        <div id="module-dynamic-menu" class="hidden md:flex items-center gap-4">
+            {% block dynamic_menu %}{% endblock %}
+        </div>
+
+        <div class="h-4 w-[1px] bg-outline-variant/30 hidden md:block"></div>
+        
+        <!-- User Context -->
+        <div class="flex items-center gap-3">
+            <img src="{{ user.profile_photo }}" alt="" class="w-6 h-6 rounded-full border border-outline-variant/30 object-cover"/>
+            <span class="font-label text-[10px] tracking-wider text-on-surface-variant/60">{{ user.first_name | upper }}</span>
+        </div>
+        <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden lg:block">dkydivyansh.com</span>
+    </div>
+</footer>
+
+<!-- Removed Custom Cursor -->
+<!-- Modal Section -->
+{% block modals %}{% endblock %}
+
+<!-- Global ZNode Dialog Portal -->
+<div id="znode-dialog-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+     <div id="znode-dialog-box" class="w-full max-w-sm mx-4 bg-[#121212] border border-white/5 shadow-2xl scale-95 transition-all duration-300 opacity-0">
+         <div class="p-8">
+             <div id="znode-dialog-title" class="font-headline text-[10px] tracking-[0.2em] text-primary uppercase mb-3 opacity-60">SYSTEM NOTIFICATION</div>
+             <div id="znode-dialog-body" class="font-label text-xs tracking-wider text-on-surface-variant leading-relaxed mb-6"></div>
+             
+             <!-- Prompt Input Container -->
+             <div id="znode-dialog-input-container" class="mb-8 hidden">
+                 <input type="text" id="znode-dialog-input" class="w-full bg-surface-container-high border-b border-outline-variant/20 px-0 py-2 text-xs font-label text-on-surface focus:outline-none focus:border-primary transition-all bg-transparent" spellcheck="false" autocomplete="off">
+             </div>
+
+             <div id="znode-dialog-actions" class="flex justify-end gap-6 font-label text-[10px] tracking-[0.15em]">
+                 <button id="znode-dialog-cancel" class="text-on-surface-variant/40 hover:text-on-surface transition-all uppercase">CANCEL</button>
+                 <button id="znode-dialog-confirm" class="text-primary hover:text-primary-light transition-all uppercase font-bold px-4 py-2 border border-primary/20 hover:border-primary/40 bg-primary/5">CONFIRM</button>
+             </div>
+         </div>
+     </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/drive.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body></html>
