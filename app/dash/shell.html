@@ -209,10 +209,12 @@
     
     <!-- Left Side: System Navigation -->
     <div class="flex items-center gap-8">
-        <a href="/" class="font-headline text-lg text-on-surface tracking-widest interactive-el">ZERONODE</a>
+        <span class="font-headline text-lg text-on-surface tracking-widest uppercase">ZERONODE</span>
         <nav class="hidden md:flex items-center gap-6">
             {% for mod_id, mod in app_modules.items() %}
+            {% if not mod.admin_only or user.is_admin %}
             <a href="/app/{{ mod_id }}" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-on-surface transition-colors uppercase interactive-el {% if module_name == mod_id %}text-on-surface{% endif %}">{{ mod.name }}</a>
+            {% endif %}
             {% endfor %}
             <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-error transition-colors uppercase interactive-el text-error">Logout</a>
 
@@ -233,8 +235,14 @@
         
         <!-- User Context -->
         <div class="flex items-center gap-3">
+            {% if user.profile_photo %}
             <img src="{{ user.profile_photo }}" alt="" class="w-6 h-6 rounded-full border border-outline-variant/30 object-cover"/>
-            <span class="font-label text-[10px] tracking-wider text-on-surface-variant/60">{{ user.first_name | upper }}</span>
+            {% else %}
+            <div class="w-6 h-6 rounded-full border border-outline-variant/30 bg-surface-container-highest flex items-center justify-center font-label text-[10px] text-primary select-none">
+                {{ (user.first_name or '?')[0] | upper }}
+            </div>
+            {% endif %}
+            <span class="font-label text-[10px] tracking-wider text-on-surface-variant">{{ user.first_name | upper }}</span>
         </div>
         <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden lg:block">dkydivyansh.com</span>
     </div>

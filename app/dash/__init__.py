@@ -17,7 +17,7 @@ def enforce_auth():
     """Strict session enforcement for ALL /app/* routes."""
     user = get_current_user()
     if not user:
-        return redirect('/login')
+        return redirect('/auth/logout?next=/login&auto=1')
     g.user = user
 
 @dashboard_bp.context_processor
@@ -179,7 +179,11 @@ def get_key_status():
     """Check if the user has completed the ECDH Vault setup."""
     manager = get_user_manager()
     has_key = manager.config_get("has_key") == "1"
-    return jsonify({"has_key": has_key}), 200
+    
+    response = jsonify({"has_key": has_key})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response, 200
 
 @dashboard_bp.route('/api/key/save', methods=['POST'])
 def save_keys():
@@ -356,4 +360,27 @@ def api_search():
     manager = get_user_manager()
     results = manager.search(query, limit)
     return jsonify(results), 200
+
+# ─── Security & Identity Erasure API ──────────────────────────
+
+@dashboard_bp.route('/api/user/self_wipe', methods=['POST'])
+def api_self_wipe():
+    """
+    NUCLEAR_SELF_ERASURE: Authoritatively de-provisions the current identity.
+    Requires forensic confirmation string-match.
+    """
+    data = request.get_json(silent=True)
+    expected = "I want to wipe my data"
+    
+    if not data or data.get('confirmation') != expected:
+        return jsonify({"error": "Forensic confirmation mismatch. Protocol aborted."}), 400
+        
+    user_id = g.user['user_id']
+    from app.modules import db_handler
+    
+    success = db_handler.wipe_self(user_id)
+    if success:
+        return jsonify({"status": "IDENTITY_PURGED", "redirect": "/auth/logout?auto=1"}), 200
+    else:
+        return jsonify({"error": "Identity de-provisioning internal failure."}), 500
 

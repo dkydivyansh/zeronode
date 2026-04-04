@@ -1,0 +1,305 @@
+{% extends "shell.html" %}
+{% block title %}ADMIN CONTROL{% endblock %}
+
+{% block dynamic_menu %}
+<button onclick="window.location.reload()" class="font-label text-[10px] text-primary interactive-el uppercase px-6 py-2.5 border border-primary/40 bg-primary/5 hover:bg-primary hover:text-black transition-all tracking-[0.2em] font-bold">FORCE_SYSTEM_RESCAN</button>
+{% endblock %}
+
+{% block content %}
+<div class="px-8 pt-12 pb-24">
+    <!-- Header -->
+    <div class="mb-16 border-l-2 border-error pl-8">
+        <h1 class="font-headline text-4xl md:text-6xl font-bold tracking-[0.1em] text-on-surface mb-3 uppercase glitch-text">
+            ADMIN_COMMAND
+        </h1>
+        <p class="font-label text-[10px] tracking-[0.5em] text-error/80 uppercase flex items-center gap-3">
+            <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+            PRIVILEGED_ACCESS_EXPECTED // SCOPE: {{ 'ADMIN' if user.is_admin else user.scope | upper }}
+        </p>
+    </div>
+
+    <div class="mb-12">
+        <!-- Physical Disk Gauge (Full Width Context) -->
+        <div class="w-full border border-outline-variant/10 p-8 bg-surface-container/30 backdrop-blur-md relative overflow-hidden group">
+            <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
+            <div class="flex justify-between items-center mb-10">
+                <p class="font-label text-[10px] tracking-[0.3em] text-primary/60 uppercase">INTERNAL_STORAGE_TELEMETRY</p>
+                <div class="flex items-center gap-2">
+                    <span id="disk-percent" class="font-mono text-xs text-primary">{{ stats.server_drive.percent }}%</span>
+                    <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                </div>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full h-[2px] bg-white/5 mb-8 overflow-hidden">
+                <div id="disk-bar" class="h-full bg-primary shadow-[0_0_10px_rgba(193,199,207,0.5)] transition-all duration-1000" style="width: {{ stats.server_drive.percent }}%"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <p class="font-label text-[10px] tracking-widest text-on-surface-variant/40 mb-2 uppercase">CAPACITY</p>
+                    <p id="disk-total" class="font-mono text-base text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.total / 1e9) | round(2) }} GB</p>
+                </div>
+                <div>
+                    <p class="font-label text-[10px] tracking-widest text-on-surface-variant/40 mb-2 uppercase">ALLOCATED</p>
+                    <p id="disk-used" class="font-mono text-base text-on-surface tracking-tighter text-nowrap">{{ (stats.server_drive.used / 1e9) | round(2) }} GB</p>
+                </div>
+                <div>
+                    <p class="font-label text-[10px] tracking-widest text-primary/60 mb-2 uppercase">AVAILABLE</p>
+                    <p id="disk-free" class="font-mono text-base text-primary tracking-tighter text-nowrap">{{ (stats.server_drive.free / 1e9) | round(2) }} GB</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section: User Management & Identity Auditing -->
+    <div class="mb-20">
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+            <div class="flex-1">
+                <div class="flex items-center gap-4 mb-2">
+                    <h2 class="font-headline text-2xl tracking-[0.3em] text-on-surface uppercase">USER_MANAGEMENT</h2>
+                    <div class="h-[1px] flex-1 bg-gradient-to-r from-outline-variant/40 to-transparent"></div>
+                </div>
+                <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase">AUTHORITATIVE_IDENTITY_LEDGER // RECENT_10_NODES</p>
+            </div>
+            
+            <div class="w-full md:w-80">
+                <div class="relative group">
+                    <input type="text" id="user-search-query" 
+                           oninput="initiateForensicSearch()"
+                           placeholder="SEARCH_IDENTITY_OR_ID" 
+                           class="w-full bg-surface-container/50 border border-outline-variant/20 px-4 py-3 font-mono text-[10px] text-on-surface focus:border-primary outline-none transition-all tracking-widest placeholder:text-on-surface-variant/20">
+                    <div class="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary/20 group-focus-within:bg-primary transition-colors"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="border border-outline-variant/10 bg-surface-container/20 backdrop-blur-sm overflow-hidden">
+            <table class="w-full text-left font-label text-[11px] tracking-wide border-collapse">
+                <thead>
+                    <tr class="bg-white/5 uppercase text-on-surface-variant/60">
+                        <th class="px-6 py-5 font-bold tracking-widest">Identity_Target</th>
+                        <th class="px-6 py-5 font-bold tracking-widest">Remote_ID</th>
+                        <th class="px-6 py-5 font-bold tracking-widest">Resource_Utilization</th>
+                        <th class="px-6 py-5 font-bold tracking-widest text-right">Operational_Gate</th>
+                    </tr>
+                </thead>
+                <tbody id="storage-table-body">
+                    <tr class="animate-pulse">
+                        <td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/40 uppercase tracking-[0.5em]">Synchronizing Identity Volumes...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Section: Identity Ledger (Whitelist & Admins) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        
+        <!-- Whitelist Management -->
+        <div class="mb-12 lg:mb-0">
+            <div class="flex justify-between items-end mb-8">
+                <h2 class="font-headline text-xl tracking-[0.3em] text-on-surface uppercase">GLOBAL_WHITELIST</h2>
+                <div class="flex gap-2">
+                    <input type="email" id="new-whitelist-email" placeholder="USER EMAIL" class="bg-black/40 border border-outline-variant/20 px-3 py-1.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                    <button onclick="addToWhitelist()" class="px-4 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase transition-all">Add</button>
+                </div>
+            </div>
+            <div class="border border-outline-variant/10 bg-surface-container/20">
+                <table class="w-full text-left font-label text-[10px] tracking-widest">
+                    <tbody id="whitelist-table-body">
+                        <!-- Dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Administrative Ranks -->
+        <div>
+            <div class="mb-8 h-[29px] flex items-end">
+                 <h2 class="font-headline text-xl tracking-[0.3em] text-on-surface uppercase">ADMINISTRATIVE_TIER</h2>
+            </div>
+            <div class="border border-outline-variant/10 bg-surface-container/20">
+                <table class="w-full text-left font-label text-[10px] tracking-widest">
+                    <tbody id="admins-table-body">
+                        <!-- Dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+let searchTimeout = null;
+
+async function refreshStats(search = null) {
+    try {
+        const url = search ? `/app/admin/api/stats?search=${encodeURIComponent(search)}` : '/app/admin/api/stats';
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        // 1. Update Disk Gauge
+        const drive = data.server_drive;
+        document.getElementById('disk-percent').innerText = drive.percent + '%';
+        document.getElementById('disk-bar').style.width = drive.percent + '%';
+        document.getElementById('disk-total').innerText = (drive.total / 1e9).toFixed(2) + ' GB';
+        document.getElementById('disk-used').innerText = (drive.used / 1e9).toFixed(2) + ' GB';
+        document.getElementById('disk-free').innerText = (drive.free / 1e9).toFixed(2) + ' GB';
+
+        // 2. Update User Management Table
+        const storageBody = document.getElementById('storage-table-body');
+        storageBody.innerHTML = data.storage_report.map(row => `
+            <tr class="border-t border-outline-variant/10 hover:bg-white/5 transition-all group">
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-4">
+                        ${row.profile_photo ? 
+                            `<img src="${row.profile_photo}" alt="" class="w-8 h-8 rounded-full border border-outline-variant/20 object-cover shadow-lg">` :
+                            `<div class="w-8 h-8 rounded-full border border-outline-variant/20 bg-surface-container-highest flex items-center justify-center font-headline text-sm text-primary select-none">
+                                ${(row.name || '?')[0].toUpperCase()}
+                            </div>`
+                        }
+                        <div>
+                            <p class="font-bold text-on-surface tracking-tight">${row.name}</p>
+                            <p class="font-mono text-[9px] text-on-surface-variant/40 lowercase">${row.email}</p>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">${row.user_id}</td>
+                <td class="px-6 py-4">
+                    <p class="font-mono text-xs text-tertiary">
+                        ${row.size_bytes > 1e9 
+                            ? (row.size_bytes / 1e9).toFixed(2) + ' GB' 
+                            : (row.size_bytes / 1e6).toFixed(2) + ' MB'}
+                    </p>
+                </td>
+                <td class="px-6 py-4 text-right">
+                    <button onclick="authorizeErasureProtocol('${row.user_id}', '${row.email}')" 
+                            class="font-label text-[9px] tracking-[0.2em] text-error/40 hover:text-error hover:bg-error/10 border border-error/10 hover:border-error/40 px-4 py-2 transition-all uppercase">
+                        ERASE_IDENTITY
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        if (data.storage_report.length === 0) {
+            storageBody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/20 uppercase tracking-[0.5em]">No Identity Matches Found</td></tr>';
+        }
+
+        // 3. Update Whitelist
+        const whitelistBody = document.getElementById('whitelist-table-body');
+        whitelistBody.innerHTML = data.whitelist.map(row => `
+            <tr class="border-t border-outline-variant/10 group">
+                <td class="px-6 py-3 font-mono text-on-surface">${row.email}</td>
+                <td class="px-6 py-3 text-right flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onclick="promote('${row.email}')" class="text-tertiary hover:underline uppercase">PROMOTE_TO_ADMIN</button>
+                    <button onclick="removeFromWhitelist('${row.email}')" class="text-error hover:underline uppercase">REVOKE_ACCESS</button>
+                </td>
+            </tr>
+        `).join('');
+
+        // 4. Update Admins
+        const adminsBody = document.getElementById('admins-table-body');
+        adminsBody.innerHTML = data.admins.map(row => `
+            <tr class="border-t border-outline-variant/10 group">
+                <td class="px-6 py-3 font-mono text-tertiary">${row.email}</td>
+                <td class="px-6 py-3 text-right flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
+                    ${row.email.toLowerCase() !== "{{ user.email.lower() }}" ? `
+                    <button onclick="demote('${row.email}')" class="text-error hover:underline uppercase">REVOKE_PRIVILEGES</button>
+                    ` : '<span class="text-on-surface-variant/20 uppercase">ROOT_ADMIN</span>'}
+                </td>
+            </tr>
+        `).join('');
+
+    } catch (e) {
+        console.error("TELEMETRY_FAILURE:", e);
+    }
+}
+
+function initiateForensicSearch() {
+    clearTimeout(searchTimeout);
+    const query = document.getElementById('user-search-query').value;
+    searchTimeout = setTimeout(() => {
+        refreshStats(query);
+    }, 400);
+}
+
+async function authorizeErasureProtocol(userId, email) {
+    const confirmation = await ZNodeDialog.confirm("AUTHORIZE_ERASURE_PROTOCOL", `You are about to physically de-provision identity [${email}] and purge all associated data volumes. This action is IRREVERSIBLE. Proceed?`);
+    
+    if (confirmation) {
+        const finalCheck = await ZNodeDialog.confirm("FINAL_VALIDATION", `Authoritatively confirm de-provisioning for ${userId}?`);
+        if (!finalCheck) return;
+
+        try {
+            const res = await fetch('/app/admin/api/user/wipe', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId })
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                await ZNodeDialog.alert("ERASURE_PROTOCOL_COMMITTED", `Identity ${data.identity} has been physically de-provisioned.`);
+                refreshStats(document.getElementById('user-search-query').value);
+            } else {
+                const err = await res.json();
+                await ZNodeDialog.alert("AUTHORIZATION_FAILURE", err.error || 'Identity erasure denied.');
+            }
+        } catch (e) {
+            console.error("ERASURE_PROTOCOL_FAILURE:", e);
+        }
+    }
+}
+
+async function addToWhitelist() {
+    const email = document.getElementById('new-whitelist-email').value;
+    if (!email) return;
+    const res = await fetch('/app/admin/api/whitelist/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email})
+    });
+    if (res.ok) {
+        document.getElementById('new-whitelist-email').value = '';
+        refreshStats(document.getElementById('user-search-query').value);
+    }
+}
+
+async function removeFromWhitelist(email) {
+    if (!await ZNodeDialog.confirm("EVICTION_PROTOCOL", `EVICT ${email} from the global vault?`)) return;
+    const res = await fetch('/app/admin/api/whitelist/remove', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email})
+    });
+    refreshStats(document.getElementById('user-search-query').value);
+}
+
+async function promote(email) {
+    if (!await ZNodeDialog.confirm("AUTHORIZE_PROMOTION", `ELEVATE ${email} to the Administrative Tier?`)) return;
+    const res = await fetch('/app/admin/api/promote', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email})
+    });
+    refreshStats(document.getElementById('user-search-query').value);
+}
+
+async function demote(email) {
+    if (!await ZNodeDialog.confirm("AUTHORIZE_REVOCATION", `REVOKE administrative privileges from ${email}?`)) return;
+    const res = await fetch('/app/admin/api/demote', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email})
+    });
+    refreshStats(document.getElementById('user-search-query').value);
+}
+
+// Initial engagement and rolling telemetry
+refreshStats();
+setInterval(() => {
+    const query = document.getElementById('user-search-query').value;
+    if (!query) refreshStats(); // Only auto-refresh if not searching
+}, 30000); 
+</script>
+{% endblock %}

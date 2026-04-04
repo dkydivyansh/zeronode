@@ -24,6 +24,9 @@ class Config:
     SSO_REDIRECT_URI  = os.environ.get('SSO_REDIRECT_URI', 'http://127.0.0.1:5000/auth/callback')
     SSO_SCOPE         = os.environ.get('SSO_SCOPE', 'basic')
 
+    # Administrative Bootstrapping
+    ADMIN_EMAIL       = os.environ.get('ADMIN_EMAIL', '')
+
     # Session cookie name
     SESSION_COOKIE_NAME = 'zeronode_session'
 

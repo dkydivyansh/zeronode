@@ -323,6 +323,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let generatedBackupStr = null;
         let generatedUploadPayload = null; // Hold pending server upload
         let generatedSessionData = null; // Hold pending session keys
+        let masterKey = null; // Persist for final unwrap
 
         backBtn.onclick = () => {
             error("");
@@ -367,7 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const saltB64 = bufferToBase64(salt);
                     console.log("[Vault] Deriving PBKDF2 Master Key from password...");
-                    const masterKey = await VaultCrypto.deriveMasterKey(pwInput.value, salt);
+                    masterKey = await VaultCrypto.deriveMasterKey(pwInput.value, salt);
                     const wrappedPrivateKey = await VaultCrypto.wrapPrivateKey(keyPair.privateKey, masterKey);
 
                     // Recovery Wrap
@@ -471,11 +472,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(generatedUploadPayload)
                     });
-                    if (!uploadRes.ok) throw new Error("Failed to save to server.");
+                    
+                    if (!uploadRes.ok) {
+                        if (uploadRes.status === 403) {
+                             console.warn("[Vault] Identity already established on server. Transitioning to unlock protocol.");
+                             setupUnlockFlow();
+                             error("Vault already initialized. Please provide existing credentials.");
+                             return;
+                        }
+                        throw new Error("Failed to save to server.");
+                    }
 
                     // --- THE GOLD STANDARD ---
                     // Unwrap as NON-EXTRACTABLE CryptoKey
-                    const privateKey = await VaultCrypto.unwrapPrivateKey(generatedSessionData.vault_priv_wrapped, masterKey, false);
+                    const privateKey = await VaultCrypto.unwrapPrivateKey(generatedUploadPayload.encrypted_private_key, masterKey, false);
 
                     // Initialize Secure Session
                     await VaultCrypto.sessionizeKey(privateKey);

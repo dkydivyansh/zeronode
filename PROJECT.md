@@ -292,8 +292,53 @@ Each localized SQLite database contains:
 | Table       | Columns (key ones)                          | Purpose                        |
 |-------------|---------------------------------------------|--------------------------------|
 | `users`     | user_id, email, first_name, last_name, profile_photo, access_token, scope | SSO user profiles |
+| `admins`    | email, added_at                             | Privileged access ledger       |
 | `whitelist` | email, added_at                             | Access control gate            |
 | `sessions`  | session_token, user_id, expires_at          | Active login sessions          |
+
+---
+
+## Administrative Security Model
+
+ZeroNode implements a multi-tier security topology to protect both user data and system integrity.
+
+### Root-of-Trust Bootstrapping
+The system utilizes an **Environmental Bootstrap Vector** to establish its first administrator without manual database intervention:
+1. **Detection**: Upon every boot, the system scans the host environment for the `ADMIN_EMAIL` variable.
+2. **Promotion**: If detected, the system autonomously performs a **Mutual Whitelisting** (adding the email to the `whitelist` and `admins` ledger simultaneously).
+3. **Persistence**: Once whitelisted, the administrator remains privileged even if the environment variable is removed, as the record is committed to the physical `admins` ledger.
+
+### Tiered Role Architecture
+Access levels are verified in a strict, sequential chain:
+*   **Tier 0 (SSO)**: Identity is verified by the trusted SSO provider.
+*   **Tier 1 (Whitelisting)**: Access to the application dashboard is restricted to emails in the `whitelist` ledger.
+*   **Tier 2 (Administrative)**: Privileged operations (User management, system overrides) are restricted to emails in the `admins` ledger. Access is physically enforced by the `admin_only` flag in the module manifests.
+
+---
+
+## Forensic Telemetry & Analytics
+
+ZeroNode includes a built-in **Administrative Telemetry Suite** for real-time resource monitoring.
+
+### System Telemetry
+- **OS-Level Disk Health**: Live tracking of the host machine's disk usage (Total/Used/Free) via `shutil.disk_usage()`.
+- **Global Storage Scanner**: Forensic aggregation of the physical disk footprint across every identity in the vault.
+
+### Administrative API (Tier-2)
+The `admin` module exposes a high-integrity API cluster at `/app/admin/api/*`:
+
+| Endpoint | Method | Purpose |
+|----------|:---:|---------|
+| `/stats` | `GET` | Unified payload: storage reports, disk health, whitelist, and admin ranks. |
+| `/promote` | `POST` | Authoritative elevation of a whitelisted user to Admin status. |
+| `/demote` | `POST` | Revocation of administrative privileges (protected against self-demotion). |
+| `/whitelist/add` | `POST` | Global registration of and identity in the access ledger. |
+| `/whitelist/remove` | `POST` | Physical eviction of an identity from the vault entry point. |
+
+> [!IMPORTANT]
+> **Privilege Isolation**: All administrative API routes inherit the strict `admin_only` protection defined in the `loader.py`, ensuring zero-bypass security for privileged operations.
+
+---
 
 ---
 

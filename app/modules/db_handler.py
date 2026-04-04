@@ -2,6 +2,7 @@ import sqlite3
 import os
 import secrets
 import time
+import shutil
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'server_data.db')
 
@@ -40,6 +41,11 @@ def init_db():
             added_at        INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS admins (
+            email           TEXT PRIMARY KEY,
+            added_at        INTEGER NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sessions (
             session_token   TEXT PRIMARY KEY,
             user_id         TEXT NOT NULL,
@@ -53,8 +59,80 @@ def init_db():
     """)
 
     conn.commit()
+
+    # --- ADMINISTRATIVE BOOTSTRAP ---
+    admin_email = os.environ.get('ADMIN_EMAIL')
+    if admin_email:
+        # Root Whitelisting & Promotion Protocol
+        conn.execute("INSERT OR IGNORE INTO whitelist (email, added_at) VALUES (?, ?)", 
+                     (admin_email.lower(), int(time.time())))
+        conn.execute("INSERT OR IGNORE INTO admins (email, added_at) VALUES (?, ?)", 
+                     (admin_email.lower(), int(time.time())))
+        conn.commit()
+
     conn.close()
 
+
+# ─── Administrative Operations ────────────────────────────────────────────
+
+def is_admin(email: str) -> bool:
+    """Check if an email is in the admin ledger."""
+    if not email: return False
+    conn = _get_conn()
+    row = conn.execute("SELECT 1 FROM admins WHERE email = ?", (email.lower(),)).fetchone()
+    conn.close()
+    return row is not None
+
+def add_admin(email: str, requester_email: str) -> bool:
+    """
+    Elevate a whitelisted user to Admin status.
+    REQUIRES: requester_email MUST ALREADY BE AN ADMIN.
+    """
+    # 1. Requester Audit Gate: Only admins can promote others
+    if not is_admin(requester_email):
+        return False
+        
+    # 2. Security Gate: Target must be whitelisted first
+    if not is_whitelisted(email):
+        return False
+        
+    conn = _get_conn()
+    try:
+        conn.execute("INSERT INTO admins (email, added_at) VALUES (?, ?)",
+                      (email.lower(), int(time.time())))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def remove_admin(email: str, requester_email: str) -> bool:
+    """
+    Revoke Admin status from a user.
+    REQUIRES: requester_email MUST ALREADY BE AN ADMIN.
+    """
+    if not is_admin(requester_email):
+        return False
+        
+    conn = _get_conn()
+    # 1. Purge administrative privileges
+    cursor = conn.execute("DELETE FROM admins WHERE email = ?", (email.lower(),))
+    
+    # 2. Authoritatively terminate all active sessions for this user ID
+    conn.execute("DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email = ?)", (email.lower(),))
+    
+    conn.commit()
+    removed = cursor.rowcount > 0
+    conn.close()
+    return removed
+
+def get_admins() -> list:
+    """Get all registered administrators."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT email, added_at FROM admins ORDER BY added_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 # ─── Whitelist Operations ────────────────────────────────────────────
 
@@ -83,7 +161,12 @@ def add_to_whitelist(email: str) -> bool:
 def remove_from_whitelist(email: str) -> bool:
     """Remove an email from the whitelist."""
     conn = _get_conn()
+    # 1. Purge whitelist access
     cursor = conn.execute("DELETE FROM whitelist WHERE email = ?", (email.lower(),))
+    
+    # 2. Authoritatively terminate all active sessions for this user ID
+    conn.execute("DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email = ?)", (email.lower(),))
+    
     conn.commit()
     removed = cursor.rowcount > 0
     conn.close()
@@ -221,6 +304,12 @@ def validate_session(token: str) -> dict | None:
     if user:
         user_dict = dict(user)
         user_dict['session_expires_at'] = row['expires_at']
+        
+        # Privilege Injection: Check if user is an admin
+        user_dict['is_admin'] = is_admin(user_dict['email'])
+        if user_dict['is_admin']:
+            user_dict['scope'] = 'ADMIN'
+            
         return user_dict
     return None
 
@@ -243,3 +332,169 @@ def destroy_user_sessions(user_id: str) -> int:
     count = cursor.rowcount
     conn.close()
     return count
+
+def get_server_drive_info() -> dict:
+    """Get OS-level disk stats for the vault DATA_DIR."""
+    # current_app might not be available if called outside request, 
+    # but we know DATA_DIR is relative to this file
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+        
+    usage = shutil.disk_usage(data_dir)
+    return {
+        "total": usage.total,
+        "used": usage.used,
+        "free": usage.free,
+        "percent": round((usage.used / usage.total) * 100, 2)
+    }
+
+def get_user_storage_report() -> list:
+    """
+    Detailed storage consumption report per user.
+    Scans the data/ directory and joins with user emails.
+    """
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+    if not os.path.exists(data_dir):
+        return []
+
+    report = []
+    conn = _get_conn()
+    
+    # 1. Get all users to map directory names to emails
+    users = {u['user_id']: dict(u) for u in conn.execute("SELECT user_id, email, first_name, last_name FROM users").fetchall()}
+    conn.close()
+
+    # 2. Scan directories
+    for entry in os.scandir(data_dir):
+        if entry.is_dir():
+            user_id = entry.name
+            user_info = users.get(user_id, {"email": "Unknown / Orphaned", "first_name": "N/A", "last_name": ""})
+            
+            # Calculate total size of user directory
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(entry.path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    try:
+                        total_size += os.path.getsize(fp)
+                    except OSError:
+                        pass
+            
+            report.append({
+                "user_id": user_id,
+                "email": user_info['email'],
+                "name": f"{user_info['first_name']} {user_info['last_name']}".strip(),
+                "size_bytes": total_size
+            })
+
+    # Sort by size descending
+    return sorted(report, key=lambda x: x['size_bytes'], reverse=True)
+
+def _atomic_erasure_internal(user_id: str, email: str) -> bool:
+    """
+    INTERNAL_ERASURE_ENGINE: Performs the absolute physical and database purge of an identity.
+    """
+    conn = _get_conn()
+    try:
+        # 1. Atomic Database Purge
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM admins WHERE email = ?", (email,))
+        conn.execute("DELETE FROM whitelist WHERE email = ?", (email,))
+        conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        conn.commit()
+
+        # 2. Physical Volume Erasure
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', user_id)
+        if os.path.exists(data_dir):
+            import shutil
+            shutil.rmtree(data_dir)
+            
+        return True # ERASURE_SUCCESSFUL
+    except Exception as e:
+        print(f"CRITICAL: Atomic erasure failure for {user_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def wipe_self(user_id: str) -> bool:
+    """
+    SELF_IDENTITY_ERASURE: Authoritatively de-provisions the current identity and purges its data.
+    """
+    conn = _get_conn()
+    user = conn.execute("SELECT email FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return False # IDENTITY_RESOLUTION_FAILURE
+        
+    return _atomic_erasure_internal(user_id, user['email'].lower())
+
+def wipe_user(user_id: str, requester_email: str) -> bool:
+    """
+    ADMIN_ERASURE_PROTOCOL: Physically de-provisions an identity and purges its data volume.
+    """
+    conn = _get_conn()
+    try:
+        # 1. Self-Erasure Prevention Gate (for ADMIN only)
+        requester = conn.execute("SELECT user_id FROM users WHERE email = ?", (requester_email.lower(),)).fetchone()
+        if requester and requester['user_id'] == user_id:
+            return False # AUTHORIZATION_DENIED: Admin cannot wipe themselves via this protocol.
+
+        # 2. Identify Target Identity
+        target = conn.execute("SELECT email FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if not target:
+            return False # IDENTITY_RESOLUTION_FAILURE: Remote identity not found.
+
+        target_email = target['email'].lower()
+        conn.close() # Close to allow internal atomic erasure
+
+        # 3. Perform Absolute Purge
+        return _atomic_erasure_internal(user_id, target_email)
+    except Exception as e:
+        print(f"CRITICAL: De-provisioning failure gate for {user_id}: {e}")
+        return False
+    finally:
+        # Check if already closed
+        try: conn.close()
+        except: pass
+
+def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
+    """
+    FORENSIC_USER_AUDIT: Retrieves storage telemetry for specific identities with filtering and limits.
+    """
+    conn = _get_conn()
+    query = "SELECT user_id, email, first_name, last_name, profile_photo FROM users"
+    params = []
+    if search:
+        query += " WHERE user_id LIKE ? OR email LIKE ? OR (first_name || ' ' || last_name) LIKE ?"
+        s = f"%{search}%"
+        params.extend([s, s, s])
+    
+    query += " ORDER BY updated_at DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    report = []
+    data_dir_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+
+    for row in rows:
+        user_id = row['user_id']
+        total_size = 0
+        user_path = os.path.join(data_dir_root, user_id)
+        if os.path.exists(user_path):
+            for dirpath, dirnames, filenames in os.walk(user_path):
+                for f in filenames:
+                    try: total_size += os.path.getsize(os.path.join(dirpath, f))
+                    except: pass
+        
+        report.append({
+            "user_id": user_id,
+            "email": row['email'],
+            "name": f"{row['first_name']} {row['last_name']}".strip() or "Identity Unresolved",
+            "profile_photo": row['profile_photo'],
+            "size_bytes": total_size
+        })
+    return report

@@ -24,12 +24,12 @@ def get_current_user():
 
 
 def login_required(f):
-    """Decorator: redirect to /login if no valid session."""
+    """Decorator: redirect to /auth/logout?next=/login if no valid session."""
     @wraps(f)
     def decorated(*args, **kwargs):
         user = get_current_user()
         if not user:
-            return redirect('/login')
+            return redirect('/auth/logout?next=/login&auto=1')
         g.user = user
         return f(*args, **kwargs)
     return decorated
@@ -130,11 +130,14 @@ def sso_callback():
 def logout():
     """Destroy session and clear cookie, then redirect to wipe page."""
     cfg = current_app.config
+    next_path = request.args.get('next', '/login')
+    auto = request.args.get('auto', '0')
+    
     token = request.cookies.get(cfg['SESSION_COOKIE_NAME'])
     if token:
         db_handler.destroy_session(token)
 
-    resp = make_response(redirect('/auth/exit'))
+    resp = make_response(redirect(f'/auth/exit?next={urllib.parse.quote(next_path)}&auto={auto}'))
     resp.delete_cookie(cfg['SESSION_COOKIE_NAME'])
     return resp
 
@@ -143,7 +146,9 @@ def logout():
 def logout_exit():
     """Render the security wipe page."""
     from flask import render_template
-    return render_template('view/logout.html')
+    next_url = request.args.get('next', '/login')
+    auto_redirect = request.args.get('auto', '0') == '1'
+    return render_template('view/logout.html', next_url=next_url, auto_redirect=auto_redirect)
 
 
 # ─── Helper ─────────────────────────────────────────────────────────

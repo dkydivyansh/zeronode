@@ -65,9 +65,9 @@
 
         <div class="p-6 border-t border-outline-variant/10 bg-surface-container-highest flex items-center justify-between">
             <div id="msg-complete" class="font-mono text-[9px] text-tertiary tracking-[0.2em] uppercase opacity-0 transition-opacity duration-300">
-                WIPE SUCCESSFUL // SESSION PROTECTED
+                WIPE SUCCESSFUL // AUTO_REDIRECTING...
             </div>
-            <a href="/" id="continue-btn" class="bg-primary/10 border border-primary text-primary px-8 py-3 hover:bg-primary hover:text-black font-bold tracking-[0.3em] uppercase text-[10px] transition-all transform translate-x-4 opacity-0 pointer-events-none flex justify-center items-center">
+            <a href="{{ next_url or '/login' }}" id="continue-btn" class="bg-primary/10 border border-primary text-primary px-8 py-3 hover:bg-primary hover:text-black font-bold tracking-[0.3em] uppercase text-[10px] transition-all transform translate-x-4 opacity-0 pointer-events-none flex justify-center items-center">
                 CONTINUE
             </a>
         </div>
@@ -145,14 +145,29 @@
             log('SESSION_WIPE: COMPLETED SUCCESSFULLY.', 'ok');
             log('STATUS: ENVIRONMENT_COLD_AND_SECURE.', 'ok');
             
-            // Immediate Completion UI
+            // Dynamic Completion UI
             const msg = document.getElementById('msg-complete');
-            if (msg) msg.classList.add('opacity-100');
+            if (msg) {
+                {% if auto_redirect %}
+                msg.innerText = "WIPE SUCCESSFUL // AUTO_REDIRECTING...";
+                {% else %}
+                msg.innerText = "WIPE SUCCESSFUL // SESSION PROTECTED";
+                {% endif %}
+                msg.classList.add('opacity-100');
+            }
+
             const btn = document.getElementById('continue-btn');
             if (btn) {
                 btn.classList.replace('opacity-0', 'opacity-100');
                 btn.classList.remove('translate-x-4', 'pointer-events-none');
             }
+
+            // Autonomic Redirect (Authorized Only)
+            {% if auto_redirect %}
+            setTimeout(() => {
+                window.location.href = "{{ next_url or '/login' }}";
+            }, 2500);
+            {% endif %}
         };
     </script>
 </body>

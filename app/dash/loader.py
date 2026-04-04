@@ -14,8 +14,9 @@ from app.routes.auth import get_current_user
 # ── REGISTER YOUR MODULES HERE ───────────────────────────────────────
 # Add module folder names to activate them. Order determines priority.
 REGISTERED_MODULES = [
-    "drive",
     "home",
+    "drive",
+    "admin",
 ]
 # ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ class ModuleManifest:
     """Base class every module manifest must implement."""
     name: str = ""
     description: str = ""
+    admin_only: bool = False # Secure flag for privilege isolation
     routes: list[str] = []   # declared route patterns, e.g. ["/home", "/home/<path:sub>"]
 
     def get_view(self, module_name: str, **kwargs):
@@ -94,11 +96,16 @@ def _register_route(blueprint, route: str, mod_name: str, manifest: ModuleManife
     endpoint = f"module_{mod_name}{safe_route}"
 
     def view_func(**kwargs):
-        # Auth is already enforced by before_request in __init__.py
+        # 1. Global Auth is already enforced by before_request in __init__.py
+        
+        # 2. Administrative Audit Gate
+        if manifest.admin_only and not g.user.get('is_admin'):
+            abort(403) # System-level rejection for unauthorized access
+            
         return manifest.get_view(mod_name, **kwargs)
 
     view_func.__name__ = endpoint  # Flask requires unique function names
-    blueprint.add_url_rule(route, endpoint=endpoint, view_func=view_func)
+    blueprint.add_url_rule(route, endpoint=endpoint, view_func=view_func, methods=['GET', 'POST', 'PATCH', 'DELETE'])
 
 
 def get_loaded_modules():
@@ -107,6 +114,7 @@ def get_loaded_modules():
         name: {
             "name": m.name,
             "description": m.description,
+            "admin_only": m.admin_only,
             "routes": m.routes
         }
         for name, m in _loaded_modules.items()
