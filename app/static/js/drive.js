@@ -4,6 +4,43 @@ const activeTaskSignals = new Map(); // uuid -> Promise
 const decryptedSessionCache = new Map(); // uuid -> Blob
 const metadataCache = new Map(); // uuid -> Object
 const previewUrls = new Map(); // uuid -> objectURL
+let readyToSaveBlob = null; // Staged for download
+const OPFS_WORKER_LIMIT = 4;
+const OPFS_CHUNK_SIZE = 1024 * 1024 * 5; // 5MB
+
+// --- 2. OPFS Helpers ---
+async function initOPFSWorkspace() {
+  try {
+    const root = await navigator.storage.getDirectory();
+    for await (const entry of root.values()) {
+      if (entry.name.startsWith("temp_decrypted_")) {
+        await root.removeEntry(entry.name);
+        showZNodeToast(`[OPFS] Cleaned orphaned file: ${entry.name}`, "info");
+        console.log(`[OPFS] Cleaned orphaned file: ${entry.name}`);
+      }
+    }
+  } catch (err) {
+    console.error("[OPFS] Workspace init error:", err);
+  }
+}
+
+async function createOPFSTempFile(uuid) {
+  const root = await navigator.storage.getDirectory();
+  const fileName = `temp_decrypted_${uuid}`;
+  return await root.getFileHandle(fileName, { create: true });
+}
+
+async function cleanupOPFS(uuid) {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const fileName = `temp_decrypted_${uuid}`;
+    await root.removeEntry(fileName);
+    showZNodeToast(`[OPFS] Cleaned up: ${fileName}`, "info");
+    console.log(`[OPFS] Cleaned up: ${fileName}`);
+  } catch (err) {
+    // If it's already gone, that's fine
+  }
+}
 
 // Queue System
 const uploadQueue = [];
@@ -109,7 +146,7 @@ async function cacheFile(uuid, encryptedBlob, metadata = null) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
-    
+
     // Merge metadata if provided, or keep existing if only updating blob
     const entry = { uuid: uuid, blob: encryptedBlob };
     if (metadata) entry.metadata = metadata;
@@ -136,14 +173,27 @@ async function getCachedFile(uuid) {
 
 async function clearCache() {
   const db = await openCacheDB();
-  
+
   // 1. Flush RAM Previews (Essential for Privacy)
   previewUrls.forEach((url) => URL.revokeObjectURL(url));
   previewUrls.clear();
-  
+
   // 2. Flush Decrypted RAM Fragments
   decryptedSessionCache.clear();
   metadataCache.clear();
+
+  // 3. Wipe OPFS Cache
+  try {
+    const root = await navigator.storage.getDirectory();
+    for await (const entry of root.values()) {
+      if (entry.kind === "file") {
+        await root.removeEntry(entry.name);
+      }
+    }
+    console.log("[OPFS] Cache wiped.");
+  } catch (e) {
+    console.error("[OPFS] OPFS Wipe failed:", e);
+  }
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -155,10 +205,11 @@ async function clearCache() {
       // 3. UI Sync - If we are in a preview, close it as the source is gone
       const previewModal = document.getElementById("drive-preview-modal");
       if (previewModal && !previewModal.classList.contains("hidden")) {
-         closeLightbox();
+        closeLightbox();
       }
       // Reload drive to show "fresh" state
-      if (document.getElementById("item-container")) fetchDrive(currentFolderId);
+      if (document.getElementById("item-container"))
+        fetchDrive(currentFolderId);
     };
     tx.onerror = reject;
   });
@@ -336,7 +387,7 @@ function updateTransfer(id, pct) {
 function completeTransfer(id) {
   const el = document.getElementById(`tf-${id}`);
   const completedList = document.getElementById("tm-completed-list");
-  
+
   // Safety: Prevent double-counting or processing non-existent items
   if (!el || el.dataset.processed === "true") return;
   el.dataset.processed = "true";
@@ -367,7 +418,7 @@ function completeTransfer(id) {
 function failTransfer(id) {
   const el = document.getElementById(`tf-${id}`);
   const failedList = document.getElementById("tm-failed-list");
-  
+
   // Safety: Prevent double-counting
   if (!el || el.dataset.processed === "true") return;
   el.dataset.processed = "true";
@@ -399,7 +450,7 @@ function failTransfer(id) {
   }
 }
 
-function showZNodeToast(message, type = "info") {
+function showZNodeToast(message, type = "info", onClick = null) {
   let container = document.getElementById("znode-toast-container");
   if (!container) {
     container = document.createElement("div");
@@ -425,6 +476,14 @@ function showZNodeToast(message, type = "info") {
         </div>
     `;
 
+  if (onClick) {
+    toast.classList.add("cursor-pointer", "hover:border-primary");
+    toast.onclick = () => {
+      onClick();
+      toast.remove();
+    };
+  }
+
   container.appendChild(toast);
 
   // Slide In
@@ -447,11 +506,11 @@ let activePreviewItem = null;
 
 async function fetchDrive(folderId = null) {
   currentFolderId = folderId;
-  
+
   // 1. Immediate Visual Feedback
   const container = document.getElementById("item-container");
   if (container) {
-      container.innerHTML = `
+    container.innerHTML = `
         <div class="col-span-full flex flex-col items-center justify-center py-28 text-on-surface-variant/30 animate-pulse">
             <div class="vault-spinner mb-4 border-on-surface-variant/30 border-t-primary" style="display: block;"></div>
             <span class="font-mono text-[10px] tracking-[0.5em] uppercase">FETCHING MANIFEST...</span>
@@ -693,7 +752,43 @@ function initMarkdownEditor(uuid, fileName, content) {
 
   // Initial Content Sync: MD -> HTML -> Editor
   if (window.marked) {
-    formatted.innerHTML = window.marked.parse(content || "");
+    // 1. Safe Chunking by Markdown Block boundaries
+    const blocks = (content || "").split(/\n\n+/);
+    let currentBlock = 0;
+    const BATCH_SIZE = 50; // Process 50 paragraphs per frame
+
+    formatted.innerHTML = ""; // Clear initial state
+
+    const processBatch = () => {
+      let htmlChunk = "";
+      let processed = 0;
+
+      // 2. Process a small batch
+      while (currentBlock < blocks.length && processed < BATCH_SIZE) {
+        try {
+          // Re-add the double newline so Marked knows it's a block
+          htmlChunk += window.marked.parse(blocks[currentBlock] + "\n\n");
+        } catch (err) {
+          console.warn(
+            "[Markdown] Block parse error. Falling back to raw text for this segment.",
+          );
+          htmlChunk += `<p class="text-error font-mono text-[10px]">${blocks[currentBlock]}</p>`;
+        }
+        currentBlock++;
+        processed++;
+      }
+
+      // 3. Inject directly into the DOM
+      formatted.insertAdjacentHTML("beforeend", htmlChunk);
+
+      // 4. Yield to the main thread, then process next batch
+      if (currentBlock < blocks.length) {
+        requestAnimationFrame(processBatch);
+      }
+    };
+
+    // Start the chunking engine
+    requestAnimationFrame(processBatch);
   } else {
     formatted.innerText = content;
   }
@@ -702,10 +797,10 @@ function initMarkdownEditor(uuid, fileName, content) {
   let turndown;
   if (window.TurndownService) {
     turndown = new window.TurndownService({
-       headingStyle: 'atx',
-       hr: '---',
-       bulletListMarker: '-',
-       codeBlockStyle: 'fenced'
+      headingStyle: "atx",
+      hr: "---",
+      bulletListMarker: "-",
+      codeBlockStyle: "fenced",
     });
   }
 
@@ -714,7 +809,9 @@ function initMarkdownEditor(uuid, fileName, content) {
     isRawMode = !isRawMode;
     if (isRawMode) {
       // Formatted -> Raw
-      raw.value = turndown ? turndown.turndown(formatted.innerHTML) : formatted.innerText;
+      raw.value = turndown
+        ? turndown.turndown(formatted.innerHTML)
+        : formatted.innerText;
       formatted.classList.add("hidden");
       raw.classList.remove("hidden");
       toggleRawBtn.innerText = "EXIT RAW";
@@ -723,7 +820,32 @@ function initMarkdownEditor(uuid, fileName, content) {
       document.getElementById("md-toolbar").style.pointerEvents = "none";
     } else {
       // Raw -> Formatted
-      formatted.innerHTML = window.marked ? window.marked.parse(raw.value) : raw.value;
+      if (window.marked) {
+        const blocks = (raw.value || "").split(/\n\n+/);
+        let currentBlock = 0;
+        const BATCH_SIZE = 50;
+        formatted.innerHTML = "";
+        const processBatch = () => {
+          let htmlChunk = "";
+          let processed = 0;
+          while (currentBlock < blocks.length && processed < BATCH_SIZE) {
+            try {
+              htmlChunk += window.marked.parse(blocks[currentBlock] + "\n\n");
+            } catch (err) {
+              htmlChunk += `<p class="text-error font-mono text-[10px]">${blocks[currentBlock]}</p>`;
+            }
+            currentBlock++;
+            processed++;
+          }
+          formatted.insertAdjacentHTML("beforeend", htmlChunk);
+          if (currentBlock < blocks.length) {
+            requestAnimationFrame(processBatch);
+          }
+        };
+        requestAnimationFrame(processBatch);
+      } else {
+        formatted.innerText = raw.value;
+      }
       raw.classList.add("hidden");
       formatted.classList.remove("hidden");
       toggleRawBtn.innerText = "SEE RAW";
@@ -739,8 +861,8 @@ function initMarkdownEditor(uuid, fileName, content) {
       e.preventDefault();
       const cmd = btn.dataset.cmd;
       const val = btn.dataset.val || null;
-      
-      if (cmd === 'createLink') {
+
+      if (cmd === "createLink") {
         const url = prompt("Enter URL:", "https://");
         if (url) document.execCommand(cmd, false, url);
       } else {
@@ -757,25 +879,30 @@ function initMarkdownEditor(uuid, fileName, content) {
     saveBtn.onclick = async () => {
       const tfId = Math.random().toString(36).substr(2, 9);
       addTransfer(tfId, fileName, "ENCRYPT");
-      
+
       saveBtn.disabled = true;
       saveText.innerText = "ENCRYPTING...";
 
       try {
         const metadata = metadataCache.get(uuid);
         const masterKey = await DriveCrypto.getVaultMasterKey();
-        const fileKey = await DriveCrypto.unwrapFileKey(metadata.aes_key, masterKey);
+        const fileKey = await DriveCrypto.unwrapFileKey(
+          metadata.aes_key,
+          masterKey,
+        );
 
         saveText.innerText = "SAVING...";
         // Skip UPLOAD event for notes as requested, just keep ENCRYPT visible
         // promoteTransfer(tfId, "UPLOAD");
-        
+
         // Final Sync to MD
         let mdOutput;
         if (isRawMode) {
-            mdOutput = raw.value;
+          mdOutput = raw.value;
         } else {
-            mdOutput = turndown ? turndown.turndown(formatted.innerHTML) : formatted.innerText;
+          mdOutput = turndown
+            ? turndown.turndown(formatted.innerHTML)
+            : formatted.innerText;
         }
 
         const encoder = new TextEncoder();
@@ -797,7 +924,7 @@ function initMarkdownEditor(uuid, fileName, content) {
 
         saveText.innerText = "SAVED TO VAULT";
         completeTransfer(tfId);
-        
+
         // Skip session caching for .md files as requested
         // decryptedSessionCache.set(uuid, new Blob([arrayBuf], { type: "text/markdown" }));
 
@@ -977,6 +1104,21 @@ function showContextMenu(x, y, dataset) {
 
 function openLightbox(dataset) {
   activePreviewItem = dataset;
+  readyToSaveBlob = decryptedSessionCache.get(dataset.id) || null;
+
+  const db = document.getElementById("pv-download-btn");
+  if (db) {
+    db.classList.remove(
+      "bg-tertiary",
+      "text-on-tertiary",
+      "bg-error",
+      "text-on-error",
+      "bg-surface-variant",
+    );
+    db.classList.add("bg-primary", "text-on-primary");
+    const span = db.querySelector("span");
+    if (span) span.innerText = "Save To Disk";
+  }
   const previewModal = document.getElementById("drive-preview-modal");
   const pvName = document.getElementById("pv-name");
   const pvSize = document.getElementById("pv-size");
@@ -1316,15 +1458,19 @@ function initDriveControls() {
           fetchDrive(currentFolderId);
         }
       } else if (action === "rename") {
-        const isMdNote = type === "file" && (activeCtxItem.name || "").toLowerCase().endsWith(".md");
-        const displayName = isMdNote ? activeCtxItem.name.slice(0, -3) : activeCtxItem.name;
+        const isMdNote =
+          type === "file" &&
+          (activeCtxItem.name || "").toLowerCase().endsWith(".md");
+        const displayName = isMdNote
+          ? activeCtxItem.name.slice(0, -3)
+          : activeCtxItem.name;
 
         let nn = await ZNodeDialog.prompt(
           "RENAME ITEM",
           `Enter new name for this ${type}:`,
           displayName,
         );
-        
+
         if (nn && nn !== displayName) {
           // Re-append .md if it's a note and user didn't manually add it
           if (isMdNote && !nn.toLowerCase().endsWith(".md")) {
@@ -1354,11 +1500,43 @@ function initDriveControls() {
   if (pvDownloadBtn) {
     pvDownloadBtn.onclick = async () => {
       if (!activePreviewItem) return;
+      const btnSpan = pvDownloadBtn.querySelector("span");
+
+      // Already saved or staged in this look? just re-trigger download
+      if (readyToSaveBlob) {
+        saveBlobToDisk(readyToSaveBlob, activePreviewItem.name);
+        btnSpan.innerText = "SAVED";
+        pvDownloadBtn.classList.remove("bg-primary", "bg-surface-variant");
+        pvDownloadBtn.classList.add("bg-tertiary", "text-on-tertiary");
+        return;
+      }
+
       toggleLightboxButtons(true);
       const loader = document.getElementById("pv-loader");
       if (loader) loader.classList.remove("opacity-0", "pointer-events-none");
+
+      btnSpan.innerText = "DECRYPTING...";
+      pvDownloadBtn.classList.remove("bg-primary");
+      pvDownloadBtn.classList.add("bg-surface-variant");
+
       try {
-        await downloadFile(activePreviewItem.id, activePreviewItem.name);
+        readyToSaveBlob = await downloadFile(
+          activePreviewItem.id,
+          activePreviewItem.name,
+          true,
+        );
+
+        // Instant Auto-Download Handshake
+        saveBlobToDisk(readyToSaveBlob, activePreviewItem.name);
+
+        btnSpan.innerText = "SAVED";
+        pvDownloadBtn.classList.remove("bg-surface-variant");
+        pvDownloadBtn.classList.add("bg-tertiary", "text-on-tertiary");
+      } catch (e) {
+        btnSpan.innerText = "FAILED";
+        pvDownloadBtn.classList.remove("bg-primary", "bg-surface-variant");
+        pvDownloadBtn.classList.add("bg-error", "text-on-error");
+        console.error(e);
       } finally {
         toggleLightboxButtons(false);
         if (loader) loader.classList.add("opacity-0", "pointer-events-none");
@@ -1370,6 +1548,10 @@ function initDriveControls() {
   if (pvPreviewBtn) {
     pvPreviewBtn.onclick = async () => {
       if (!activePreviewItem) return;
+
+      // 1. Hide the preview button immediately so it doesn't clutter the UI
+      pvPreviewBtn.style.display = "none";
+
       toggleLightboxButtons(true);
       const loader = document.getElementById("pv-loader");
       if (loader) loader.classList.remove("opacity-0", "pointer-events-none");
@@ -1397,7 +1579,8 @@ function initDriveControls() {
         } else if (["pdf"].includes(ext)) {
           // Custom but secure container
           const wrapper = document.createElement("div");
-          wrapper.className = "flex flex-col w-full h-full bg-surface-container overflow-hidden";
+          wrapper.className =
+            "flex flex-col w-full h-full bg-surface-container overflow-hidden";
           wrapper.innerHTML = `
             <div class="px-6 py-3 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container-high">
                 <div class="flex items-center gap-3">
@@ -1412,19 +1595,82 @@ function initDriveControls() {
           el = wrapper;
           // Trigger Custom Render
           setTimeout(() => renderPDF(url, "pdf-viewer-canvas"), 100);
-        } else if (["txt", "md", "js", "ts", "html", "css", "py", "json", "sql", "log", "rtf", "c", "cpp", "java", "php", "sh"].includes(ext)) {
-          const t = await blob.text();
-          if (ext === "md") {
+        } else if (
+          [
+            "txt",
+            "md",
+            "js",
+            "ts",
+            "html",
+            "css",
+            "py",
+            "json",
+            "sql",
+            "log",
+            "rtf",
+            "c",
+            "cpp",
+            "java",
+            "php",
+            "sh",
+          ].includes(ext)
+        ) {
+          const MAX_RICH_RENDER_SIZE = 500 * 1024; // 500 KB Limit for Rich Editor
+          const MAX_RAW_READ_SIZE = 5 * 1024 * 1024; // 5 MB Limit for RAM
+
+          // 1. SAFE MARKDOWN: Open in standard Rich Editor
+          if (ext === "md" && blob.size <= MAX_RICH_RENDER_SIZE) {
+            const t = await blob.text();
             initMarkdownEditor(activePreviewItem.id, activePreviewItem.name, t);
             return;
           }
-          el = document.createElement("pre");
-          el.innerText = t;
+
+          // 2. RAW FALLBACK: File is too large for Rich Editor or is a standard code/text file
+          if (ext === "md") {
+            showZNodeToast(
+              "FILE TOO LARGE FOR EDITOR. OPENING IN RAW VIEW.",
+              "info",
+            );
+          }
+
+          let t = "";
+          let isTruncated = false;
+
+          // 3. RAM PROTECTION: Slice the blob if it's massive
+          if (blob.size > MAX_RAW_READ_SIZE) {
+            const chunk = blob.slice(0, MAX_RAW_READ_SIZE);
+            t = await chunk.text();
+            isTruncated = true;
+            showZNodeToast("FILE TRUNCATED TO CONSERVE MEMORY.", "error");
+          } else {
+            t = await blob.text();
+          }
+
+          // 4. Render the optimized Raw Textarea
+          el = document.createElement("textarea");
+          el.value =
+            t +
+            (isTruncated
+              ? "\n\n... [FILE TRUNCATED. PLEASE DOWNLOAD TO VIEW FULL CONTENT] ..."
+              : "");
+          el.readOnly = true;
+          el.spellcheck = false; // Prevents dictionary from freezing the tab on 5MB files
           el.className =
-            "text-on-surface font-mono text-[10px] leading-relaxed p-8 bg-surface-container-highest/20 w-full h-full overflow-auto whitespace-pre-wrap selection:bg-primary selection:text-black";
+            "text-on-surface font-mono text-[11px] leading-relaxed p-16 md:p-24 bg-[#020202] w-full h-full resize-none focus:outline-none selection:bg-primary/30 selection:text-white border-none";
+
+          const content = document.getElementById("pv-content");
+          if (content) {
+            content.innerHTML = "";
+            content.appendChild(el);
+          }
+
+          // Ensure the footer with the Download button is visible
+          const footer = document.getElementById("pv-footer");
+          if (footer) footer.style.display = "flex";
         } else {
           el = document.createElement("div");
-          el.className = "flex flex-col items-center justify-center p-12 text-on-surface-variant/40";
+          el.className =
+            "flex flex-col items-center justify-center p-12 text-on-surface-variant/40";
           el.innerHTML = `
             <svg class="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             <span class="font-mono text-[10px] tracking-widest text-center">PREVIEW NOT AVAILABLE<br>FOR THIS FILE TYPE</span>
@@ -1437,6 +1683,10 @@ function initDriveControls() {
         }
       } catch (e) {
         console.error(e);
+
+        // 2. If it fails to load, bring the preview button back so they can try again
+        pvPreviewBtn.style.display = "flex";
+
         await ZNodeDialog.alert(
           "PREVIEW ERROR",
           "Failed to decrypt and render this file for preview.",
@@ -1472,6 +1722,15 @@ async function decryptFolderMedia() {
 
     if (!mediaExts.includes(ext)) continue;
     if (previewUrls.has(id)) continue;
+
+    const size = parseInt(el.dataset.size || 0);
+    const BULK_LIMIT = 15 * 1024 * 1024; // Skip files over 15MB in bulk preview
+
+    if (size > BULK_LIMIT) {
+      console.warn(`Skipping bulk preview for ${name} (Too large)`);
+      showZNodeToast(`Skipping bulk preview for ${name} (Too large)`, "error");
+      continue;
+    }
 
     // 1. Check if we already have it decrypted in the session
     if (decryptedSessionCache.has(id)) {
@@ -1522,7 +1781,6 @@ function applyFailure(el) {
 }
 
 // --- 6. File Operations ---
-const CHUNK_SIZE = 1024 * 1024 * 5;
 async function processUploadQueue(file) {
   if (file) {
     const tfId = Math.random().toString(36).substr(2, 9);
@@ -1550,10 +1808,13 @@ async function uploadFile(file, tfId) {
   if (!file) return;
   if (file.size === 0 && !file.name.endsWith(".md")) {
     failTransfer(tfId);
-    showZNodeToast(`ABORTED: ${file.name} is an empty file (0 bytes).`, "error");
+    showZNodeToast(
+      `ABORTED: ${file.name} is an empty file (0 bytes).`,
+      "error",
+    );
     return;
   }
-  const isLarge = file.size > 500 * 1024 * 1024; // 500MB threshold
+  const isLarge = file.size > 100 * 1024 * 1024; // 100MB threshold
   const ext = file.name.split(".").pop().toLowerCase();
 
   // Status already added by processUploadQueue
@@ -1579,7 +1840,7 @@ async function uploadFile(file, tfId) {
     const cipherChunks = [];
 
     while (offset < file.size) {
-      const chunk = file.slice(offset, offset + CHUNK_SIZE);
+      const chunk = file.slice(offset, offset + OPFS_CHUNK_SIZE);
       const arrayBuf = await chunk.arrayBuffer();
       const iv = new Uint8Array(12);
       new DataView(iv.buffer).setUint32(8, idx, false);
@@ -1627,54 +1888,26 @@ async function uploadFile(file, tfId) {
 }
 
 async function downloadFile(uuid, name, returnBlob = false) {
+  // 1. Session RAM Cache Check
   if (decryptedSessionCache.has(uuid)) {
     const b = decryptedSessionCache.get(uuid);
     if (returnBlob) return b;
     saveBlobToDisk(b, name);
     return;
   }
+
+  // 2. Active Task Check
   if (activeTaskSignals.has(uuid)) return await activeTaskSignals.get(uuid);
 
-    const task = (async () => {
-      let tfId = Math.random().toString(36).substr(2, 9);
-      const ext = (name || "").split(".").pop().toLowerCase();
-      try {
-        addTransfer(tfId, name, "DECRYPT");
-      let encryptedBytes;
+  const task = (async () => {
+    let tfId = Math.random().toString(36).substr(2, 9);
+    const ext = (name || "").split(".").pop().toLowerCase();
+
+    try {
+      addTransfer(tfId, name, "DECRYPT");
+
+      // STEP 1: The Gatekeeper (Metadata First)
       let metadata = metadataCache.get(uuid);
-
-      const diskCached = await getCachedFile(uuid);
-      if (diskCached) {
-        encryptedBytes = await diskCached.blob.arrayBuffer();
-        if (diskCached.metadata) {
-          metadata = diskCached.metadata;
-          metadataCache.set(uuid, metadata); // Hydrate RAM cache
-        }
-      } else {
-        const res = await fetch(`/app/api/file/${uuid}`);
-        const reader = res.body.getReader();
-        let received = 0,
-          chunks = [];
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          updateTransfer(
-            tfId,
-            (received / res.headers.get("Content-Length")) * 100,
-          );
-        }
-        const full = new Uint8Array(received);
-        let pos = 0;
-        for (let c of chunks) {
-          full.set(c, pos);
-          pos += c.length;
-        }
-        encryptedBytes = full.buffer;
-        // Don't cache here yet, wait until metadata is also fetched below
-      }
-
       if (!metadata) {
         const r = await fetch(`/app/api/file/${uuid}/meta`);
         if (!r.ok)
@@ -1687,12 +1920,46 @@ async function downloadFile(uuid, name, returnBlob = false) {
         metadataCache.set(uuid, metadata);
       }
 
-      // If we downloaded it fresh, cache it with the metadata now (unless it's an .md file)
-      if (!diskCached && ext !== "md") {
-         await cacheFile(uuid, new Blob([encryptedBytes]), metadata);
+      const fileSize = metadata.file_size;
+      const isMd = ext === "md";
+
+      // If file is large (>100MB) or isn't a simple note, use OPFS Parallel Engine
+      if (fileSize > 100 * 1024 * 1024 || (!isMd && !returnBlob)) {
+        return await downloadFileOPFSEngine(
+          uuid,
+          name,
+          metadata,
+          tfId,
+          returnBlob,
+        );
       }
-      if (!encryptedBytes || encryptedBytes.byteLength === 0) {
-        throw new Error("Vault stream is empty. The file may be missing from storage.");
+
+      // Legacy/Small File Logic (RAM-based)
+      const diskCached = await getCachedFile(uuid);
+      let encryptedBytes;
+      if (diskCached) {
+        encryptedBytes = await diskCached.blob.arrayBuffer();
+      } else {
+        const res = await fetch(`/app/api/file/${uuid}`);
+        const reader = res.body.getReader();
+        let received = 0,
+          chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          updateTransfer(tfId, (received / fileSize) * 100);
+        }
+        const full = new Uint8Array(received);
+        let pos = 0;
+        for (let c of chunks) {
+          full.set(c, pos);
+          pos += c.length;
+        }
+        encryptedBytes = full.buffer;
+        if (ext !== "md")
+          await cacheFile(uuid, new Blob([encryptedBytes]), metadata);
       }
 
       const masterKey = await DriveCrypto.getVaultMasterKey();
@@ -1701,12 +1968,14 @@ async function downloadFile(uuid, name, returnBlob = false) {
         masterKey,
       );
       let decryptedChunks = [];
-      for (let i = 0; i * (CHUNK_SIZE + 16) < encryptedBytes.byteLength; i++) {
+      const CHUNK_WITH_TAG = OPFS_CHUNK_SIZE + 16;
+
+      for (let i = 0; i * CHUNK_WITH_TAG < encryptedBytes.byteLength; i++) {
         const iv = new Uint8Array(12);
         new DataView(iv.buffer).setUint32(8, i, false);
         const chunk = encryptedBytes.slice(
-          i * (CHUNK_SIZE + 16),
-          (i + 1) * (CHUNK_SIZE + 16),
+          i * CHUNK_WITH_TAG,
+          (i + 1) * CHUNK_WITH_TAG,
         );
         decryptedChunks.push(
           await crypto.subtle.decrypt(
@@ -1716,57 +1985,172 @@ async function downloadFile(uuid, name, returnBlob = false) {
           ),
         );
       }
-      const mimeTypes = {
-        pdf: "application/pdf",
-        txt: "text/plain",
-        html: "text/html",
-        css: "text/css",
-        js: "application/javascript",
-        json: "application/json",
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        png: "image/png",
-        gif: "image/gif",
-        webp: "image/webp",
-        mp4: "video/mp4",
-        webm: "video/webm",
-      };
-      const finalMime = mimeTypes[ext] || "application/octet-stream";
 
+      const finalMime = "application/octet-stream";
       const finalBlob = new Blob(decryptedChunks, { type: finalMime });
-      if (ext !== "md") {
+
+      const CACHE_RAM_LIMIT = 10 * 1024 * 1024; // 10MB
+      if (ext !== "md" && finalBlob.size <= CACHE_RAM_LIMIT) {
         decryptedSessionCache.set(uuid, finalBlob);
       }
+
       completeTransfer(tfId);
+      if (!returnBlob) saveBlobToDisk(finalBlob, name);
       return finalBlob;
     } catch (err) {
-      // Signal failure to UI card if it exists in current view
       const el = document.querySelector(`.drive-item[data-id="${uuid}"]`);
       if (el) applyFailure(el);
-
-      // Signal failure to Transfer Manager
       failTransfer(tfId);
       showZNodeToast(`FAILED: ${name} - ${err.message}`, "error");
-
       throw err;
     } finally {
       activeTaskSignals.delete(uuid);
     }
   })();
+
   activeTaskSignals.set(uuid, task);
-  const result = await task;
-  if (!returnBlob) saveBlobToDisk(result, name);
-  return result;
+  return await task;
+}
+
+/**
+ * PHASE 3: The OPFS Parallel Engine (The Speed Boost)
+ * Fetches and decrypts in parallel using HTTP Range requests and local OPFS staging.
+ */
+/**
+ * PHASE 3: The OPFS Parallel Engine (The Speed Boost)
+ * Fetches and decrypts in parallel using HTTP Range requests and local OPFS staging.
+ */
+async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
+  const masterKey = await DriveCrypto.getVaultMasterKey();
+  const fileKey = await DriveCrypto.unwrapFileKey(metadata.aes_key, masterKey);
+  const fileSize = metadata.file_size; // This is the total ENCRYPTED size on the server
+
+  // Setup OPFS
+  const fileHandle = await createOPFSTempFile(uuid);
+  const writable = await fileHandle.createWritable();
+
+  const CHUNK_WITH_TAG = OPFS_CHUNK_SIZE + 16;
+
+  // FIX 1: Math Bug. Must divide by the chunk size WITH the encryption tag,
+  // otherwise it tries to fetch a non-existent chunk at the end of the file.
+  const numChunks = Math.ceil(fileSize / CHUNK_WITH_TAG);
+  const tasks = Array.from({ length: numChunks }, (_, i) => i);
+
+  let completedChunks = 0;
+  let isWriting = false; // FIX 2: Write Lock to prevent Chrome crashing from concurrent writes
+
+  const pvLoader = document.getElementById("pv-loader");
+  const pvLoaderText = pvLoader ? pvLoader.querySelector("span") : null;
+
+  if (pvLoader) pvLoader.classList.remove("opacity-0", "pointer-events-none");
+
+  const runWorker = async () => {
+    while (tasks.length > 0) {
+      const chunkIdx = tasks.shift();
+      const start = chunkIdx * CHUNK_WITH_TAG;
+      const end = Math.min((chunkIdx + 1) * CHUNK_WITH_TAG - 1, fileSize - 1);
+
+      try {
+        const res = await fetch(`/app/api/file/${uuid}`, {
+          headers: { Range: `bytes=${start}-${end}` },
+        });
+        if (!res.ok) throw new Error(`Chunk ${chunkIdx} fetch failed`);
+
+        const encryptedBuffer = await res.arrayBuffer();
+        const iv = new Uint8Array(12);
+        new DataView(iv.buffer).setUint32(8, chunkIdx, false);
+
+        const decryptedData = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: iv },
+          fileKey,
+          encryptedBuffer,
+        );
+
+        // Wait for turn to write (prevents InvalidStateError)
+        while (isWriting) await new Promise((r) => setTimeout(r, 10));
+        isWriting = true;
+        try {
+          await writable.write({
+            type: "write",
+            position: chunkIdx * OPFS_CHUNK_SIZE,
+            data: decryptedData,
+          });
+        } finally {
+          isWriting = false; // Release lock
+        }
+
+        completedChunks++;
+        const pct = (completedChunks / numChunks) * 100;
+        updateTransfer(tfId, pct);
+        if (pvLoaderText)
+          pvLoaderText.innerText = `DECRYPTING ${Math.round(pct)}%...`;
+      } catch (err) {
+        console.error(`[Worker] Error on chunk ${chunkIdx}:`, err);
+        throw err;
+      }
+    }
+  };
+
+  try {
+    // Establishing Worker Pool
+    const workers = Array.from({ length: OPFS_WORKER_LIMIT }, () =>
+      runWorker(),
+    );
+    await Promise.all(workers);
+    await writable.close();
+
+    completeTransfer(tfId);
+
+    // Handshake: OPFS -> Disk
+    const finalFile = await fileHandle.getFile();
+
+    if (returnBlob) {
+      await cleanupOPFS(uuid);
+      if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
+
+      const ext = name.split(".").pop().toLowerCase();
+      const mimeTypes = {
+        pdf: "application/pdf",
+        mp4: "video/mp4",
+        webm: "video/webm",
+        jpg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        txt: "text/plain",
+      };
+      const mime = mimeTypes[ext] || "application/octet-stream";
+      return new Blob([finalFile], { type: mime });
+    }
+
+    // "Regular Download Trigger"
+    const url = URL.createObjectURL(finalFile);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // Cleanup after a delay
+    setTimeout(() => cleanupOPFS(uuid), 5000);
+    if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
+
+    return finalFile;
+  } catch (err) {
+    await writable.abort();
+    await cleanupOPFS(uuid);
+    if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
+    throw err;
+  }
 }
 
 async function renderPDF(url, containerId) {
   const container = document.getElementById(containerId);
-  if (!container) return;
 
   // 1. Wait for pdfjsLib to load (Retry logic for async scripts)
   let retries = 0;
   while (!window.pdfjsLib && retries < 20) {
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
     retries++;
   }
 
@@ -1778,43 +2162,47 @@ async function renderPDF(url, containerId) {
   try {
     // Force worker initialization if missed (LOCAL)
     if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
-       window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/js/pdf.worker.min.js';
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "/static/js/pdf.worker.min.js";
     }
 
     const params = {
       url: url,
-      cMapUrl: '/static/js/cmaps/',
+      cMapUrl: "/static/js/cmaps/",
       cMapPacked: true,
     };
 
     const loadingTask = window.pdfjsLib.getDocument(params);
     const pdf = await loadingTask.promise;
-    
+
     // Clear spinner
-    const spinner = document.getElementById('pdf-load-spinner');
+    const spinner = document.getElementById("pdf-load-spinner");
     if (spinner) spinner.remove();
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const MAX_SAFE_PAGES = Math.min(pdf.numPages, 10); // Prevent Canvas OOM
+
+    for (let pageNum = 1; pageNum <= MAX_SAFE_PAGES; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const scale = 1.6;
       const viewport = page.getViewport({ scale });
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      canvas.className = "shadow-2xl mb-12 max-w-full h-auto bg-white transition-opacity duration-700 opacity-0 rounded-sm";
-      
+      canvas.className =
+        "shadow-2xl mb-12 max-w-full h-auto bg-white transition-opacity duration-700 opacity-0 rounded-sm";
+
       container.appendChild(canvas);
 
       const renderContext = {
         canvasContext: ctx,
         viewport: viewport,
-        enableWebGL: true
+        enableWebGL: true,
       };
-      
+
       await page.render(renderContext).promise;
-      canvas.classList.remove('opacity-0');
+      canvas.classList.remove("opacity-0");
     }
   } catch (e) {
     console.error("PDF.js Render Failed, falling back to iframe:", e);
@@ -1965,6 +2353,7 @@ async function moveItem(id, type, name) {
 
 // --- 7. Boot ---
 document.addEventListener("DOMContentLoaded", () => {
+  initOPFSWorkspace();
   updateCacheCountUI();
   const tmHdr = document.getElementById("tm-header");
   if (tmHdr) {

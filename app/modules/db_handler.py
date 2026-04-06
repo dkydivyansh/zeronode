@@ -399,6 +399,7 @@ def get_user_storage_report() -> list:
 def _atomic_erasure_internal(user_id: str, email: str) -> bool:
     """
     INTERNAL_ERASURE_ENGINE: Performs the absolute physical and database purge of an identity.
+    Uses robust retry logic and authoritative error handlers for Windows file-lock recovery.
     """
     conn = _get_conn()
     try:
@@ -408,19 +409,39 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
         conn.execute("DELETE FROM whitelist WHERE email = ?", (email,))
         conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         conn.commit()
-
-        # 2. Physical Volume Erasure
-        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', user_id)
-        if os.path.exists(data_dir):
-            import shutil
-            shutil.rmtree(data_dir)
-            
-        return True # ERASURE_SUCCESSFUL
     except Exception as e:
-        print(f"CRITICAL: Atomic erasure failure for {user_id}: {e}")
-        return False
+        print(f"CRITICAL: Identity de-provisioning DB failure for {user_id}: {e}")
     finally:
         conn.close()
+
+    # 2. Physical Volume Erasure (Robust Walker)
+    data_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', user_id))
+    
+    def force_remove_readonly(func, path, excinfo):
+        """Authoritative error handler to break file locks/readonly attributes."""
+        import stat
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except:
+            pass
+
+    if os.path.exists(data_dir):
+        import shutil
+        import time
+        # Try up to 5 times to bypass transient locks (common on Windows with SQLite WAL)
+        for attempt in range(5):
+            try:
+                shutil.rmtree(data_dir, onerror=force_remove_readonly)
+                if not os.path.exists(data_dir):
+                    return True # ERASURE_SUCCESSFUL
+            except Exception as e:
+                if attempt == 4:
+                    print(f"CRITICAL: Physical volume erasure final failure for {user_id}: {e}")
+            time.sleep(0.5) # Wait for transient locks/GC to release
+            
+    return not os.path.exists(data_dir) # True if gone, False if still exists
+
 
 def wipe_self(user_id: str) -> bool:
     """

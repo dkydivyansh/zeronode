@@ -44,7 +44,8 @@ def create_app(config_name='dev'):
             "img-src 'self' data: blob: https://sso.dkydivyansh.com; "
             "font-src 'self'; "
             "media-src 'self' blob:; "
-            "connect-src 'self' https://sso.dkydivyansh.com; "
+            "connect-src 'self' https://sso.dkydivyansh.com blob:; "
+            "worker-src 'self' blob:; "
             "frame-src 'self' data: blob: https://sso.dkydivyansh.com; "
             "object-src 'self' blob:;"
         )

@@ -2,7 +2,7 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+<link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
 <title>ZERONODE // {% block title %}VAULT{% endblock %}</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
 <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
