@@ -672,6 +672,15 @@ function initMarkdownEditor(uuid, fileName, content) {
   const pvContent = document.getElementById("pv-content");
   if (!pvContent) return;
 
+  // Hide the lightbox's own header and footer so the editor is the only UI
+  const pvTopBar = document.querySelector('#drive-preview-modal > div:first-child');
+  const pvSurface = document.getElementById('pv-surface');
+  if (pvTopBar) pvTopBar.style.display = 'none';
+  const pvFooter = document.getElementById('pv-footer');
+  if (pvFooter) pvFooter.style.display = 'none';
+  // Let the surface fill without padding when in editor mode
+  if (pvSurface) pvSurface.style.padding = '0';
+
   // Add Editor Styles if missing
   if (!document.getElementById("md-editor-styles")) {
     const style = document.createElement("style");
@@ -701,11 +710,18 @@ function initMarkdownEditor(uuid, fileName, content) {
     document.head.appendChild(style);
   }
 
+  const displayTitle = getNameWithoutMD(fileName);
+
   const editorHtml = `
       <div class="flex flex-col w-full h-full bg-surface-container overflow-hidden">
-          <div class="flex border-b border-outline-variant/20 bg-surface-container-high h-[54px] shrink-0 items-center px-6 justify-between shadow-lg z-20">
-              <div class="flex items-center gap-4">
-                  <div class="flex items-center gap-1 border-r border-outline-variant/20 pr-4 mr-1" id="md-toolbar">
+          <div class="flex border-b border-outline-variant/20 bg-surface-container-high shrink-0 items-center px-6 justify-between shadow-lg z-20 py-3 gap-4">
+              <div class="flex items-center gap-4 overflow-hidden">
+                  <div class="flex items-center gap-2 shrink-0">
+                      <svg class="w-4 h-4 text-primary/60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      <span class="font-headline text-sm tracking-widest text-on-surface uppercase truncate max-w-[200px]">${displayTitle}</span>
+                  </div>
+                  <div class="w-[1px] h-5 bg-outline-variant/20 shrink-0"></div>
+                  <div class="flex items-center gap-1 shrink-0" id="md-toolbar">
                       <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Heading 1" data-cmd="formatBlock" data-val="h1"><b>H1</b></button>
                       <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Heading 2" data-cmd="formatBlock" data-val="h2"><b>H2</b></button>
                       <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded text-[9px]" title="Heading 3" data-cmd="formatBlock" data-val="h3"><b>H3</b></button>
@@ -721,14 +737,19 @@ function initMarkdownEditor(uuid, fileName, content) {
                       <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Numbered List" data-cmd="insertOrderedList">1.</button>
                       <button class="md-tool p-1.5 hover:bg-surface-variant text-on-surface-variant/60 hover:text-primary transition-all rounded" title="Link" data-cmd="createLink">🔗</button>
                   </div>
-                  <button id="md-toggle-raw" class="font-mono text-[9px] tracking-[0.2em] text-primary/40 hover:text-primary uppercase transition-colors px-3 py-1.5 border border-primary/10 hover:bg-primary/5">
+                  <div class="w-[1px] h-5 bg-outline-variant/20 shrink-0"></div>
+                  <button id="md-toggle-raw" class="font-mono text-[9px] tracking-[0.2em] text-primary/40 hover:text-primary uppercase transition-colors px-3 py-1.5 border border-primary/10 hover:bg-primary/5 shrink-0">
                     SEE RAW
                   </button>
               </div>
-              <div class="flex items-center gap-3">
-                  <button id="md-save-btn" class="bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[10px] tracking-[0.2em] px-8 py-2.5 uppercase transition-all flex items-center gap-2 group">
-                     <span id="md-save-text">SAVE TO VAULT</span>
+              <div class="flex items-center gap-3 shrink-0">
+                  <button id="md-save-btn" class="bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[10px] tracking-[0.2em] px-6 py-2.5 uppercase transition-all flex items-center gap-2 group">
+                     <span id="md-save-text">SAVE</span>
                      <svg class="w-3 h-3 group-hover:animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path></svg>
+                  </button>
+                  <button id="md-disk-btn" class="border border-outline-variant/30 text-on-surface-variant/60 hover:text-primary hover:border-primary/30 font-label text-[10px] tracking-[0.2em] px-6 py-2.5 uppercase transition-all flex items-center gap-2" title="Download as .md file">
+                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                     <span>DISK</span>
                   </button>
                   <button id="md-close-btn" class="text-on-surface-variant/30 hover:text-error transition-all p-2" title="Exit Note Studio">
                       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -873,10 +894,39 @@ function initMarkdownEditor(uuid, fileName, content) {
   });
 
   const internalCloseBtn = document.getElementById("md-close-btn");
-  if (internalCloseBtn) internalCloseBtn.onclick = closeLightbox;
+  if (internalCloseBtn) internalCloseBtn.onclick = () => {
+    // Restore lightbox chrome before closing
+    const pvTopBar = document.querySelector('#drive-preview-modal > div:first-child');
+    const pvSurface = document.getElementById('pv-surface');
+    const pvFooter = document.getElementById('pv-footer');
+    if (pvTopBar) pvTopBar.style.display = '';
+    if (pvFooter) pvFooter.style.display = '';
+    if (pvSurface) pvSurface.style.padding = '';
+    closeLightbox();
+  };
+
+  // Save to Disk handler
+  const diskBtn = document.getElementById("md-disk-btn");
+  if (diskBtn) {
+    diskBtn.onclick = () => {
+      let mdOutput;
+      if (isRawMode) {
+        mdOutput = raw.value;
+      } else {
+        mdOutput = turndown
+          ? turndown.turndown(formatted.innerHTML)
+          : formatted.innerText;
+      }
+      const blob = new Blob([mdOutput], { type: "text/markdown;charset=utf-8" });
+      saveBlobToDisk(blob, fileName);
+      showZNodeToast(`EXPORTED: ${fileName}`, "info");
+    };
+  }
 
   if (saveBtn) {
     saveBtn.onclick = async () => {
+      if (saveBtn.disabled) return; // Guard against double-clicks
+
       const tfId = Math.random().toString(36).substr(2, 9);
       addTransfer(tfId, fileName, "ENCRYPT");
 
@@ -884,7 +934,15 @@ function initMarkdownEditor(uuid, fileName, content) {
       saveText.innerText = "ENCRYPTING...";
 
       try {
-        const metadata = metadataCache.get(uuid);
+        // Fetch metadata (with server fallback if cache is stale/missing)
+        let metadata = metadataCache.get(uuid);
+        if (!metadata || !metadata.aes_key) {
+          const metaRes = await fetch(`/app/api/file/${uuid}/meta`);
+          if (!metaRes.ok) throw new Error("Failed to retrieve file metadata.");
+          metadata = await metaRes.json();
+          metadataCache.set(uuid, metadata);
+        }
+
         const masterKey = await DriveCrypto.getVaultMasterKey();
         const fileKey = await DriveCrypto.unwrapFileKey(
           metadata.aes_key,
@@ -892,8 +950,6 @@ function initMarkdownEditor(uuid, fileName, content) {
         );
 
         saveText.innerText = "SAVING...";
-        // Skip UPLOAD event for notes as requested, just keep ENCRYPT visible
-        // promoteTransfer(tfId, "UPLOAD");
 
         // Final Sync to MD
         let mdOutput;
@@ -922,24 +978,38 @@ function initMarkdownEditor(uuid, fileName, content) {
 
         if (!res.ok) throw new Error("Save Error");
 
-        saveText.innerText = "SAVED TO VAULT";
+        // Update cached metadata with new size from server
+        try {
+          const result = await res.json();
+          if (metadata) {
+            metadata.file_size = result.size;
+            metadata.last_modified = result.last_modified;
+          }
+        } catch (_) {
+          // Non-critical: metadata sync failed, save itself succeeded
+        }
+
+        saveText.innerText = "SAVED";
         completeTransfer(tfId);
 
-        // Skip session caching for .md files as requested
-        // decryptedSessionCache.set(uuid, new Blob([arrayBuf], { type: "text/markdown" }));
+        // Refresh the drive listing so the UI reflects updated file size
+        if (document.getElementById("item-container")) {
+          fetchDrive(currentFolderId);
+        }
 
         setTimeout(() => {
-          saveText.innerText = "SAVE TO VAULT";
-          saveBtn.disabled = false;
+          saveText.innerText = "SAVE";
         }, 1500);
       } catch (err) {
         console.error(err);
         failTransfer(tfId);
         saveText.innerText = "ERROR";
         setTimeout(() => {
-          saveText.innerText = "SAVE TO VAULT";
-          saveBtn.disabled = false;
+          saveText.innerText = "SAVE";
         }, 3000);
+      } finally {
+        // Always re-enable the button regardless of success/failure
+        saveBtn.disabled = false;
       }
     };
   }
@@ -1197,6 +1267,18 @@ function openLightbox(dataset) {
 function closeLightbox() {
   const previewModal = document.getElementById("drive-preview-modal");
   if (!previewModal) return;
+
+  // Restore any hidden lightbox chrome (in case MD editor hid them)
+  const pvTopBar = previewModal.querySelector(':scope > div:first-child');
+  const pvSurface = document.getElementById('pv-surface');
+  const pvFooter = document.getElementById('pv-footer');
+  if (pvTopBar) pvTopBar.style.display = '';
+  if (pvFooter) pvFooter.style.display = '';
+  if (pvSurface) pvSurface.style.padding = '';
+
+  // Reset PDF zoom state
+  _pdfState = null;
+
   previewModal.classList.remove("opacity-100");
   previewModal.classList.add("opacity-0");
   setTimeout(() => {
@@ -1577,7 +1659,7 @@ function initDriveControls() {
           el.controls = true;
           el.className = "max-w-full max-h-full shadow-2xl";
         } else if (["pdf"].includes(ext)) {
-          // Custom but secure container
+          // Custom but secure container with zoom controls
           const wrapper = document.createElement("div");
           wrapper.className =
             "flex flex-col w-full h-full bg-surface-container overflow-hidden";
@@ -1587,13 +1669,19 @@ function initDriveControls() {
                     <svg class="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z"></path><path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path></svg>
                     <span class="font-mono text-[9px] tracking-[0.2em] text-on-surface-variant uppercase">PREVIEWING SECURE DOCUMENT // ${activePreviewItem.name.toUpperCase()}</span>
                 </div>
+                <div class="flex items-center gap-2">
+                    <button id="pdf-zoom-out" class="w-8 h-8 flex items-center justify-center text-on-surface-variant/60 hover:text-primary hover:bg-surface-variant border border-outline-variant/20 transition-all font-mono text-sm font-bold" title="Zoom Out">−</button>
+                    <span id="pdf-zoom-level" class="font-mono text-[9px] tracking-widest text-on-surface-variant/60 min-w-[50px] text-center uppercase">100%</span>
+                    <button id="pdf-zoom-in" class="w-8 h-8 flex items-center justify-center text-on-surface-variant/60 hover:text-primary hover:bg-surface-variant border border-outline-variant/20 transition-all font-mono text-sm font-bold" title="Zoom In">＋</button>
+                    <button id="pdf-zoom-reset" class="ml-2 font-mono text-[9px] tracking-widest text-primary/40 hover:text-primary uppercase transition-colors px-3 py-1.5 border border-primary/10 hover:bg-primary/5" title="Reset Zoom">FIT</button>
+                </div>
             </div>
             <div id="pdf-viewer-canvas" class="flex-grow flex flex-col items-center gap-6 p-8 overflow-auto bg-surface-container-high/30 scroll-smooth">
                 <div class="vault-spinner mb-4 border-on-surface-variant/30 border-t-primary" id="pdf-load-spinner"></div>
             </div>
           `;
           el = wrapper;
-          // Trigger Custom Render
+          // Trigger Custom Render with zoom support
           setTimeout(() => renderPDF(url, "pdf-viewer-canvas"), 100);
         } else if (
           [
@@ -2104,23 +2192,15 @@ async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
     // Handshake: OPFS -> Disk
     const finalFile = await fileHandle.getFile();
 
-    if (returnBlob) {
-      await cleanupOPFS(uuid);
-      if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
+    // Return the OPFS-backed File directly — it's already a Blob subclass.
+    // DO NOT wrap in `new Blob([finalFile])` — that copies the entire file into RAM and OOMs on large files.
+    // DO NOT cleanup OPFS immediately — the File object needs its backing store alive until the browser finishes saving.
+    const OPFS_CLEANUP_DELAY = 5 * 60 * 1000; // 5 minutes
 
-      const ext = name.split(".").pop().toLowerCase();
-      const mimeTypes = {
-        pdf: "application/pdf",
-        mp4: "video/mp4",
-        webm: "video/webm",
-        jpg: "image/jpeg",
-        png: "image/png",
-        gif: "image/gif",
-        webp: "image/webp",
-        txt: "text/plain",
-      };
-      const mime = mimeTypes[ext] || "application/octet-stream";
-      return new Blob([finalFile], { type: mime });
+    if (returnBlob) {
+      if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
+      setTimeout(() => cleanupOPFS(uuid), OPFS_CLEANUP_DELAY);
+      return finalFile;
     }
 
     // "Regular Download Trigger"
@@ -2131,8 +2211,8 @@ async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
     a.click();
     URL.revokeObjectURL(url);
 
-    // Cleanup after a delay
-    setTimeout(() => cleanupOPFS(uuid), 5000);
+    // Cleanup after delay to let the browser finish streaming
+    setTimeout(() => cleanupOPFS(uuid), OPFS_CLEANUP_DELAY);
     if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
 
     return finalFile;
@@ -2143,6 +2223,8 @@ async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
     throw err;
   }
 }
+
+let _pdfState = null; // Module-level state for active PDF viewer
 
 async function renderPDF(url, containerId) {
   const container = document.getElementById(containerId);
@@ -2179,31 +2261,33 @@ async function renderPDF(url, containerId) {
     const spinner = document.getElementById("pdf-load-spinner");
     if (spinner) spinner.remove();
 
-    const MAX_SAFE_PAGES = Math.min(pdf.numPages, 10); // Prevent Canvas OOM
+    const MAX_SAFE_PAGES = Math.min(pdf.numPages, 50); // Increased safe limit
 
-    for (let pageNum = 1; pageNum <= MAX_SAFE_PAGES; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const scale = 1.6;
-      const viewport = page.getViewport({ scale });
+    // Store state for zoom controls
+    _pdfState = {
+      pdf: pdf,
+      containerId: containerId,
+      url: url,
+      scale: 1.6,
+      maxPages: MAX_SAFE_PAGES,
+    };
 
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      canvas.className =
-        "shadow-2xl mb-12 max-w-full h-auto bg-white transition-opacity duration-700 opacity-0 rounded-sm";
+    // Render at initial scale
+    await _renderPDFPages(pdf, container, 1.6, MAX_SAFE_PAGES);
 
-      container.appendChild(canvas);
+    // Update zoom label
+    const zoomLabel = document.getElementById("pdf-zoom-level");
+    if (zoomLabel) zoomLabel.innerText = '100%';
 
-      const renderContext = {
-        canvasContext: ctx,
-        viewport: viewport,
-        enableWebGL: true,
-      };
+    // Bind zoom controls
+    const zoomIn = document.getElementById("pdf-zoom-in");
+    const zoomOut = document.getElementById("pdf-zoom-out");
+    const zoomReset = document.getElementById("pdf-zoom-reset");
 
-      await page.render(renderContext).promise;
-      canvas.classList.remove("opacity-0");
-    }
+    if (zoomIn) zoomIn.onclick = () => _pdfZoom(0.25);
+    if (zoomOut) zoomOut.onclick = () => _pdfZoom(-0.25);
+    if (zoomReset) zoomReset.onclick = () => _pdfZoomTo(1.6);
+
   } catch (e) {
     console.error("PDF.js Render Failed, falling back to iframe:", e);
     // FALLBACK: Use iframe if PDF.js fails
@@ -2214,6 +2298,53 @@ async function renderPDF(url, containerId) {
       <iframe src="${url}" class="w-full h-full border-none bg-white relative z-10" type="application/pdf"></iframe>
     `;
   }
+}
+
+async function _renderPDFPages(pdf, container, scale, maxPages) {
+  container.innerHTML = ''; // Clear previous renders
+  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    canvas.className =
+      "shadow-2xl mb-12 max-w-full h-auto bg-white transition-opacity duration-500 opacity-0 rounded-sm";
+
+    container.appendChild(canvas);
+
+    const renderContext = {
+      canvasContext: ctx,
+      viewport: viewport,
+      enableWebGL: true,
+    };
+
+    await page.render(renderContext).promise;
+    canvas.classList.remove("opacity-0");
+  }
+}
+
+async function _pdfZoom(delta) {
+  if (!_pdfState) return;
+  const newScale = Math.max(0.4, Math.min(5.0, _pdfState.scale + delta));
+  if (newScale === _pdfState.scale) return;
+  await _pdfZoomTo(newScale);
+}
+
+async function _pdfZoomTo(newScale) {
+  if (!_pdfState) return;
+  _pdfState.scale = newScale;
+  const container = document.getElementById(_pdfState.containerId);
+  if (!container) return;
+
+  // Update label
+  const zoomLabel = document.getElementById("pdf-zoom-level");
+  const pct = Math.round((newScale / 1.6) * 100);
+  if (zoomLabel) zoomLabel.innerText = `${pct}%`;
+
+  await _renderPDFPages(_pdfState.pdf, container, newScale, _pdfState.maxPages);
 }
 
 function saveBlobToDisk(blob, name) {

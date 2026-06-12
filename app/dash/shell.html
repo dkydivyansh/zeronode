@@ -52,6 +52,32 @@
         background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
         background-size: 100% 4px;
     }
+
+    /* Custom Scrollbar Design */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #000;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(171, 171, 171, 0.25);
+        border: 2px solid #000;
+        border-radius: 5px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(193, 199, 207, 0.5);
+    }
+    ::-webkit-scrollbar-corner {
+        background: #000;
+    }
+
+    /* Firefox Compatibility */
+    * {
+        scrollbar-width: auto;
+        scrollbar-color: rgba(171, 171, 171, 0.25) #000;
+    }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
 <script src="{{ url_for('static', filename='js/wordlist.js') }}"></script>

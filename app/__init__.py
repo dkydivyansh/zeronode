@@ -33,10 +33,6 @@ def create_app(config_name='dev'):
 
     @app.after_request
     def set_secure_headers(response):
-        """Hardened Security Posture for ZeroNode Vault."""
-        # 1. Total Lock CSP (No external scripts allowed except for specific whitelists)
-        # We allow data: and blob: for our custom renderers and icons
-        # Also allow dkydivyansh.com for SSO authentication flow
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://sso.dkydivyansh.com; "
