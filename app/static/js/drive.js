@@ -1916,6 +1916,11 @@ async function uploadFile(file, tfId, entityType = "subject") {
       idx = 0,
       cOff = 0;
     const cipherChunks = [];
+    
+    // Concurrent Upload Pool to defeat Cloudflare network latency
+    const MAX_CONCURRENT = 4;
+    const activeUploads = [];
+    let totalUploadedBytes = 0;
 
     while (offset < file.size) {
       const chunk = file.slice(offset, offset + OPFS_CHUNK_SIZE);
@@ -1932,20 +1937,38 @@ async function uploadFile(file, tfId, entityType = "subject") {
       // Only cache in RAM/IndexedDB if it's a manageable size
       if (!isLarge) cipherChunks.push(enc);
 
-      await fetchWithRetry(`${FILE_API}/${uuid}/chunk`, {
+      const currentCOff = cOff;
+      const currentChunkSize = chunk.size;
+
+      const p = fetchWithRetry(`${FILE_API}/${uuid}/chunk`, {
         method: "POST",
         headers: {
-          "X-Chunk-Offset": cOff.toString(),
+          "X-Chunk-Offset": currentCOff.toString(),
           "Content-Type": "application/octet-stream",
         },
         body: enc,
+      }).then(() => {
+        totalUploadedBytes += currentChunkSize;
+        updateTransfer(tfId, (totalUploadedBytes / file.size) * 100);
       });
+
+      activeUploads.push(p);
+      p.finally(() => {
+        const index = activeUploads.indexOf(p);
+        if (index > -1) activeUploads.splice(index, 1);
+      });
+
+      if (activeUploads.length >= MAX_CONCURRENT) {
+        await Promise.race(activeUploads);
+      }
 
       offset += chunk.size;
       cOff += enc.byteLength;
       idx++;
-      updateTransfer(tfId, (offset / file.size) * 100);
     }
+
+    // Await any remaining active chunk uploads in the pool
+    await Promise.all(activeUploads);
 
     await fetchWithRetry(`${FILE_API}/${uuid}/finalize`, { method: "POST" });
 
