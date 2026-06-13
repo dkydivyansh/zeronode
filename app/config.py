@@ -1,7 +1,7 @@
 import os
 
 # Load .env file manually (no external dependency needed)
-_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', '.env')
 if os.path.isfile(_env_path):
     with open(_env_path) as f:
         for line in f:

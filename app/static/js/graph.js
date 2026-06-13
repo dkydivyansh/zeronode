@@ -17,6 +17,10 @@ async function sha256Hash(message) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function utf8ToBase64(str) {
+    return btoa(unescape(encodeURIComponent(str || "")));
+}
+
 function base64ToUtf8(b64) {
     try { return decodeURIComponent(escape(atob(b64 || ""))); } catch(e) { return ""; }
 }
@@ -668,6 +672,336 @@ document.addEventListener("DOMContentLoaded", async () => {
             } finally {
                 btnCreateSubj.classList.remove('loading');
             }
+        });
+    }
+    // --- JSON Bulk Import Logic ---
+    let pendingJsonData = [];
+    let jsonKeys = [];
+
+    const btnOpenJsonImport = document.getElementById('btn-open-json-import');
+    const jsonImportInput = document.getElementById('json-import-input');
+    const modalJsonMapper = document.getElementById('modal-json-mapper');
+    const jsonMappingContainer = document.getElementById('json-mapping-container');
+    const btnStartJsonImport = document.getElementById('btn-start-json-import');
+    const jsonProgressContainer = document.getElementById('json-import-progress-container');
+    const jsonProgressText = document.getElementById('json-import-progress-text');
+    const jsonProgressBar = document.getElementById('json-import-progress-bar');
+
+    if (btnOpenJsonImport && jsonImportInput) {
+        btnOpenJsonImport.addEventListener('click', () => {
+            jsonImportInput.click();
+        });
+
+        jsonImportInput.addEventListener('change', async (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
+            try {
+                const text = await file.text();
+                pendingJsonData = JSON.parse(text);
+                if (!Array.isArray(pendingJsonData)) throw new Error("JSON must be an array of objects.");
+                if (pendingJsonData.length === 0) throw new Error("JSON array is empty.");
+
+                const keysSet = new Set();
+                const limit = Math.min(pendingJsonData.length, 100);
+                for (let i = 0; i < limit; i++) {
+                    Object.keys(pendingJsonData[i]).forEach(k => keysSet.add(k));
+                }
+                jsonKeys = Array.from(keysSet);
+
+                renderJsonMappingUI();
+                modalJsonMapper.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    document.getElementById('json-mapper-box').classList.remove('scale-95', 'opacity-0');
+                    document.getElementById('json-mapper-box').classList.add('scale-100', 'opacity-100');
+                }, 10);
+
+            } catch (err) {
+                console.error(err);
+                showZNodeToast("INVALID JSON: " + err.message, "error");
+            }
+            jsonImportInput.value = ''; 
+        });
+    }
+
+    function renderJsonMappingUI() {
+        jsonMappingContainer.innerHTML = '';
+        jsonProgressContainer.classList.add('hidden');
+        btnStartJsonImport.disabled = false;
+        
+        const standardFields = ['Ignore', 'Name', 'DOB', 'Phone', 'Email', 'Gender', 'Profile Photo (Base64)', 'Custom Attribute'];
+        
+        jsonKeys.forEach(key => {
+            let autoMatch = 'Ignore';
+            const lowerKey = key.toLowerCase();
+            if (lowerKey.includes('name') && !lowerKey.includes('father') && !lowerKey.includes('mother')) autoMatch = 'Name';
+            if (lowerKey === 'dob' || lowerKey === 'date_of_birth') autoMatch = 'DOB';
+            if (lowerKey.includes('phone') || lowerKey.includes('mobile')) autoMatch = 'Phone';
+            if (lowerKey.includes('email')) autoMatch = 'Email';
+            if (lowerKey === 'gender') autoMatch = 'Gender';
+            if (lowerKey === 'photo_base64' || lowerKey === 'photo' || lowerKey === 'image') autoMatch = 'Profile Photo (Base64)';
+            if (autoMatch === 'Ignore' && !lowerKey.includes('id')) autoMatch = 'Custom Attribute';
+
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-4 bg-surface p-3 border border-outline-variant/20 rounded';
+            
+            row.innerHTML = `
+                <div class="w-1/3 truncate font-mono text-[11px] text-primary" title="${key}">${key}</div>
+                <div class="w-2/3 flex items-center gap-2">
+                    <span class="text-on-surface-variant/50">→</span>
+                    <select class="json-key-mapping w-full bg-surface-container-high border border-outline-variant/30 text-[#e5e5e5] font-label text-xs uppercase tracking-widest px-3 py-2 focus:outline-none focus:border-primary" data-json-key="${key}">
+                        ${standardFields.map(f => `<option value="${f}" ${f === autoMatch ? 'selected' : ''}>${f}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+            jsonMappingContainer.appendChild(row);
+        });
+
+        // Group Assignment UI setup
+        const groupSelect = document.getElementById('json-import-group-select');
+        const newGroupInput = document.getElementById('json-import-new-group-name');
+        const relationTypeInput = document.getElementById('json-import-relation-type');
+        
+        if (groupSelect) {
+            // Keep first two default options, remove dynamic ones
+            Array.from(groupSelect.options).forEach((opt, idx) => { if(idx > 1) opt.remove(); });
+            
+            graphState.groups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.uuid;
+                opt.textContent = g.name || "UNNAMED GROUP";
+                groupSelect.appendChild(opt);
+            });
+
+            groupSelect.onchange = () => {
+                const v = groupSelect.value;
+                if (v === '') {
+                    newGroupInput.classList.add('hidden');
+                    relationTypeInput.classList.add('hidden');
+                } else if (v === 'NEW_GROUP') {
+                    newGroupInput.classList.remove('hidden');
+                    relationTypeInput.classList.remove('hidden');
+                } else {
+                    newGroupInput.classList.add('hidden');
+                    relationTypeInput.classList.remove('hidden');
+                }
+            };
+            groupSelect.value = '';
+            groupSelect.onchange();
+        }
+    }
+
+    function b64toBlob(b64Data, contentType='') {
+        if (b64Data.includes('base64,')) b64Data = b64Data.split('base64,')[1];
+        const byteCharacters = atob(b64Data);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+            byteArrays.push(new Uint8Array(byteNumbers));
+        }
+        return new Blob(byteArrays, {type: contentType});
+    }
+
+    function parseDobString(val) {
+        if (!val) return '';
+        val = val.trim();
+        if (/^\d{8}$/.test(val)) {
+            return `${val.substring(4,8)}-${val.substring(2,4)}-${val.substring(0,2)}`;
+        }
+        const parsed = new Date(val);
+        if (!isNaN(parsed.getTime())) {
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const d = String(parsed.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        return val;
+    }
+
+    if (btnStartJsonImport) {
+        btnStartJsonImport.addEventListener('click', async () => {
+            const mappings = {};
+            document.querySelectorAll('.json-key-mapping').forEach(select => {
+                mappings[select.dataset.jsonKey] = select.value;
+            });
+
+            btnStartJsonImport.classList.add('loading');
+            btnStartJsonImport.disabled = true;
+            jsonProgressContainer.classList.remove('hidden');
+            
+            // Handle Group Setup
+            const groupVal = document.getElementById('json-import-group-select').value;
+            let targetGroupUuid = null;
+            let relType = document.getElementById('json-import-relation-type').value.trim() || "Member";
+            
+            if (groupVal === 'NEW_GROUP') {
+                const newGroupName = document.getElementById('json-import-new-group-name').value.trim() || "Imported Group";
+                const searchBlob = { name: newGroupName, note: "" };
+                const mainBlob = { name: newGroupName, custom_keys: {} };
+                const encSearch = await encryptPayload(searchBlob, graphState.masterKey);
+                const encMain = await encryptPayload(mainBlob, graphState.masterKey);
+                try {
+                    const gRes = await fetch("/app/graph/api/group", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ encrypted_search_blob: encSearch, encrypted_blob: encMain })
+                    });
+                    if (gRes.ok) {
+                        const gData = await gRes.json();
+                        targetGroupUuid = gData.uuid;
+                    }
+                } catch(e) {
+                    console.error("Failed to create new group for import", e);
+                }
+            } else if (groupVal) {
+                targetGroupUuid = groupVal;
+            }
+
+            let successCount = 0;
+            let total = pendingJsonData.length;
+
+            for (let i = 0; i < total; i++) {
+                const record = pendingJsonData[i];
+                let payload = {
+                    name: "Unknown", dob: "", phone: "", email: "", gender: "Other", custom_keys: {}, photo: null
+                };
+                let photoBlob = null;
+
+                for (const key of Object.keys(record)) {
+                    const target = mappings[key];
+                    const val = record[key];
+                    if (!val || target === 'Ignore') continue;
+                    
+                    const strVal = String(val).trim();
+                    if (!strVal) continue;
+
+                    if (target === 'Name') payload.name = strVal;
+                    if (target === 'DOB') payload.dob = parseDobString(strVal);
+                    if (target === 'Phone') payload.phone = strVal;
+                    if (target === 'Email') payload.email = strVal;
+                    if (target === 'Gender') payload.gender = strVal;
+                    if (target === 'Custom Attribute') {
+                        payload.custom_keys[key] = { key: key, value: utf8ToBase64(strVal), type: 'short_text' };
+                    }
+                    if (target === 'Profile Photo (Base64)') {
+                        try {
+                            photoBlob = b64toBlob(strVal, 'image/jpeg');
+                        } catch (e) {
+                            console.warn("Failed to parse base64 photo for record", i);
+                        }
+                    }
+                }
+
+                // FIRST: Create subject without photo
+                let subjectUuid = null;
+                try {
+                    const emailHash = await sha256Hash(payload.email);
+                    const phoneHash = await sha256Hash(payload.phone);
+                    const dobHash = await sha256Hash(payload.dob);
+
+                    const searchBlob = { name: payload.name, note: "", photo: null, gender: payload.gender };
+                    
+                    const encSearchBlob = await encryptPayload(searchBlob, graphState.masterKey);
+                    const encFullBlob = await encryptPayload(payload, graphState.masterKey);
+
+                    const apiPayload = {
+                        encrypted_search_blob: encSearchBlob,
+                        encrypted_blob: encFullBlob,
+                        email_hash: emailHash,
+                        phone_hash: phoneHash,
+                        dob_hash: dobHash
+                    };
+
+                    const res = await fetch("/app/graph/api/subject", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(apiPayload)
+                    });
+                    
+                    if (res.ok) {
+                        const sData = await res.json();
+                        subjectUuid = sData.uuid;
+                        successCount++;
+                    }
+                } catch(e) {
+                    console.error("Subject create error", e);
+                }
+
+                if (!subjectUuid) continue;
+
+                // SECOND: Upload photo if exists, using the new subject UUID
+                let photoUpdated = false;
+                if (photoBlob) {
+                    try {
+                        const fileObj = new File([photoBlob], `photo_${i}.jpg`, {type: "image/jpeg"});
+                        const tfId = "up-bulk-" + Math.random().toString(36).substr(2, 9);
+                        if (window.addTransfer) window.addTransfer(tfId, `PHOTO REQ ${i+1}`, "ENCRYPT");
+                        
+                        // Temporarily set currentSubjectUuid so drive.js knows who the file belongs to
+                        const prevSubjectUuid = window.currentSubjectUuid;
+                        window.currentSubjectUuid = subjectUuid;
+                        
+                        // Correct signature: uploadFile(file, tfId, entityType)
+                        payload.photo = await uploadFile(fileObj, tfId, 'subject');
+                        
+                        window.currentSubjectUuid = prevSubjectUuid;
+                        photoUpdated = true;
+                    } catch(e) {
+                        console.warn("Photo upload error", e);
+                    }
+                }
+
+                // THIRD: If photo was uploaded, patch the subject
+                if (photoUpdated && payload.photo) {
+                    try {
+                        const searchBlob = { name: payload.name, note: "", photo: payload.photo, gender: payload.gender };
+                        const encSearchBlob = await encryptPayload(searchBlob, graphState.masterKey);
+                        const encFullBlob = await encryptPayload(payload, graphState.masterKey);
+                        
+                        await fetch(`/app/graph/api/subject/${subjectUuid}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                encrypted_search_blob: encSearchBlob,
+                                encrypted_blob: encFullBlob
+                            })
+                        });
+                    } catch(e) {
+                        console.error("Subject patch error", e);
+                    }
+                }
+
+                // FOURTH: Create Relationship if target group is set
+                if (targetGroupUuid) {
+                    try {
+                        const relBlob = { type: relType, description: "" };
+                        const encRelBlob = await encryptPayload(relBlob, graphState.masterKey);
+                        await fetch('/app/graph/api/relation', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                source_uuid: subjectUuid,
+                                target_uuid: targetGroupUuid,
+                                encrypted_blob: encRelBlob,
+                                source_type: "subject",
+                                target_type: "group"
+                            })
+                        });
+                    } catch(e) {
+                        console.error("Failed to link subject to group", e);
+                    }
+                }
+
+                jsonProgressText.innerText = `${i + 1} / ${total}`;
+                jsonProgressBar.style.width = `${((i + 1) / total) * 100}%`;
+            }
+
+            btnStartJsonImport.classList.remove('loading');
+            showZNodeToast(`IMPORTED ${successCount} IDENTITIES`, "success");
+            modalJsonMapper.classList.add('hidden');
+            loadSearchIndex(); // Refresh UI
         });
     }
 

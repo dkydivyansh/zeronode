@@ -2,7 +2,7 @@ from app import create_app
 import os
 
 # Load .env file manually so run.py sees FLASK_ENV before app creation
-_env_path = os.path.join(os.path.dirname(__file__), '.env')
+_env_path = os.path.join(os.path.dirname(__file__), 'data', '.env')
 if os.path.isfile(_env_path):
     with open(_env_path) as f:
         for line in f:
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     if env in ['production', 'prod']:
         print(f"[*] Starting Production WSGI Server (Waitress) on 0.0.0.0:{port}...")
         from waitress import serve
-        serve(app, host='0.0.0.0', port=port)
+        serve(app, host='0.0.0.0', port=port, threads=16)
     else:
         print(f"[*] Starting Development Server on 127.0.0.1:{port}...")
         app.run(host='127.0.0.1', port=port, debug=True)

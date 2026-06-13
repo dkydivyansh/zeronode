@@ -113,8 +113,7 @@ class GraphDataManager:
 
         # Create Triggers safely (IF NOT EXISTS is not standard for triggers in all SQLite versions, so drop then create)
         conn.executescript("""
-            DROP TRIGGER IF EXISTS snapshot_subject_update;
-            CREATE TRIGGER snapshot_subject_update
+            CREATE TRIGGER IF NOT EXISTS snapshot_subject_update
             BEFORE UPDATE ON subjects
             FOR EACH ROW
             BEGIN
@@ -131,8 +130,7 @@ class GraphDataManager:
                 );
             END;
 
-            DROP TRIGGER IF EXISTS snapshot_subject_delete;
-            CREATE TRIGGER snapshot_subject_delete
+            CREATE TRIGGER IF NOT EXISTS snapshot_subject_delete
             BEFORE DELETE ON subjects
             FOR EACH ROW
             BEGIN
@@ -140,8 +138,7 @@ class GraphDataManager:
                 VALUES (OLD.uuid, 'DELETE', OLD.encrypted_blob, datetime('now', '+60 days'));
             END;
 
-            DROP TRIGGER IF EXISTS snapshot_group_update;
-            CREATE TRIGGER snapshot_group_update
+            CREATE TRIGGER IF NOT EXISTS snapshot_group_update
             BEFORE UPDATE ON groups
             FOR EACH ROW
             BEGIN
@@ -158,8 +155,7 @@ class GraphDataManager:
                 );
             END;
 
-            DROP TRIGGER IF EXISTS snapshot_group_delete;
-            CREATE TRIGGER snapshot_group_delete
+            CREATE TRIGGER IF NOT EXISTS snapshot_group_delete
             BEFORE DELETE ON groups
             FOR EACH ROW
             BEGIN

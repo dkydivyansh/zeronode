@@ -138,6 +138,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         try {
             const res = await fetch(`/app/graph/api/group/${currentSubjectUuid}`);
+            if (res.status === 404) throw new Error("404_NOT_FOUND");
             if (!res.ok) throw new Error("Failed to fetch group");
             const data = await res.json();
             
@@ -198,21 +199,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const wrapper = document.createElement('div');
                     wrapper.className = "space-y-2 relative group p-3 border border-outline-variant/10 bg-surface-variant/5 hover:border-primary/30 hover:bg-surface-variant/10 rounded-lg transition-all";
                     
+                    const keyType = keyData.type || 'short_text';
                     const labelHeader = document.createElement('div');
                     labelHeader.className = "flex justify-between items-center";
                     labelHeader.innerHTML = `
                         <label class="font-mono text-[10px] text-primary/90 uppercase tracking-widest font-semibold flex items-center gap-2">
                             ${keyName} 
-                            <span class="text-on-surface-variant/50 text-[8px] font-normal tracking-wider uppercase px-1.5 py-0.5 border border-outline-variant/20 rounded bg-surface shadow-sm">${keyData.type.replace('_', ' ')}</span>
+                            <span class="text-on-surface-variant/50 text-[8px] font-normal tracking-wider uppercase px-1.5 py-0.5 border border-outline-variant/20 rounded bg-surface shadow-sm">${String(keyType).replace('_', ' ')}</span>
                         </label>
-                        <button class="text-error/0 group-hover:text-error/80 hover:!text-error hover:bg-error/10 rounded text-[9px] font-mono tracking-widest uppercase transition-all px-2 py-1 flex items-center gap-1" onclick="deleteCustomKey('${keyName.replace(/'/g, "\\'")}')" title="Delete Attribute">
+                        <button class="text-error/0 group-hover:text-error/80 hover:!text-error hover:bg-error/10 rounded text-[9px] font-mono tracking-widest uppercase transition-all px-2 py-1 flex items-center gap-1" onclick="deleteCustomKey('${String(keyName).replace(/'/g, "\\'")}')" title="Delete Attribute">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     `;
                     wrapper.appendChild(labelHeader);
                     
                     let inputEl;
-                    if (keyData.type === 'long_text') {
+                    if (keyType === 'long_text') {
                         inputEl = document.createElement('textarea');
                         inputEl.rows = 3;
                         inputEl.className = "custom-key-input w-full bg-surface border border-outline-variant/20 rounded text-[#e5e5e5] font-body text-sm px-3 py-2 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/30 transition-all resize-y placeholder-on-surface-variant/20";
@@ -268,7 +270,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 ${!isPhoto ? `<button class="text-on-surface-variant/50 hover:text-error transition-colors text-xs" onclick="deleteGraphFile('${f.uuid}')" title="Delete">X</button>` : ''}
                             </div>
                         </div>
-                        ${meta.description ? `<div class="font-body text-[13px] text-on-surface-variant/80 border-l-2 border-primary/30 pl-3 py-1 mt-1 prose-sm markdown-body overflow-hidden">${marked.parse(meta.description)}</div>` : ''}
+                        ${meta.description ? `<div class="font-body text-[13px] text-on-surface-variant/80 border-l-2 border-primary/30 pl-3 py-1 mt-1 prose-sm markdown-body overflow-hidden cursor-pointer hover:bg-surface-variant/30 transition-colors line-clamp-2" onclick="viewLongText('${f.file_name.replace(/'/g, "\\'")}', \`${encodeURIComponent(meta.description)}\`)">${marked.parse(meta.description)}</div>` : ''}
                     `;
                     filesList.appendChild(el);
                 });
@@ -329,7 +331,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         } catch (e) {
             console.error(e);
-            document.getElementById('det-uuid-title').innerText = "ERROR LOADING SUBJECT";
+            if (e.message === "404_NOT_FOUND") {
+                document.getElementById('det-uuid-title').innerText = "GROUP NOT FOUND";
+                document.getElementById('det-name').value = "404 - Not Found";
+                errBox.innerText = "This group was deleted or does not exist.";
+                errBox.classList.remove('hidden');
+            } else {
+                document.getElementById('det-uuid-title').innerText = "ERROR LOADING GROUP";
+            }
         }
     }
 

@@ -1072,6 +1072,25 @@ class ZNodeDialog {
 }
 window.ZNodeDialog = ZNodeDialog;
 
+window.viewLongText = (title, encodedText) => {
+    const text = decodeURIComponent(encodedText);
+    let overlay = document.createElement("div");
+    overlay.className = "fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center backdrop-blur-md";
+    overlay.innerHTML = `
+        <div class="bg-surface-container border border-outline-variant/30 w-full max-w-2xl shadow-2xl flex flex-col m-4 max-h-[90vh]">
+            <div class="p-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-variant/20">
+                <h3 class="font-mono text-sm tracking-widest text-primary font-bold uppercase truncate pr-4">${title}</h3>
+                <button class="text-on-surface-variant/50 hover:text-error transition-colors shrink-0" onclick="this.closest('.fixed').remove()">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar prose-sm markdown-body font-body text-on-surface-variant text-[14px]">
+                ${marked.parse(text, { breaks: true })}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
 // Global Toast Notification
 function showZNodeToast(message, type = "info", onClick = null) {
   let container = document.getElementById("znode-toast-container");

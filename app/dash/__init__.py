@@ -23,7 +23,8 @@ def enforce_auth():
 @dashboard_bp.context_processor
 def inject_modules():
     """Inject loaded modules globally into all dashboard templates."""
-    return dict(app_modules=get_loaded_modules())
+    import time
+    return dict(app_modules=get_loaded_modules(), now_ts=int(time.time()))
 
 
 from flask import send_file, request, jsonify
@@ -324,33 +325,8 @@ def api_create_folder():
 @dashboard_bp.route('/api/drive/list/<folder_id>', methods=['GET'])
 def api_list_folder(folder_id=None):
     """List contents of a specific folder or root."""
-    if folder_id == "virtual_graph":
-        from app.dash.modules.graph.graph_data import get_graph_manager
-        graph_manager = get_graph_manager()
-        graph_files = graph_manager.get_all_graph_files()
-        return jsonify({
-            "folders": [],
-            "files": [{"id": f["uuid"], "file_name": f["name"], "file_size": f["file_size"], "last_modified": f["last_modified"]} for f in graph_files],
-            "path": [{"id": "virtual_graph", "name": "Identity Graph Attachments"}]
-        }), 200
-
     manager = get_user_manager()
     result = manager.list_folder(folder_id)
-    
-    if folder_id is None:
-        # Inject Virtual Graph Folder at root
-        from app.dash.modules.graph.graph_data import get_graph_manager
-        graph_manager = get_graph_manager()
-        graph_files = graph_manager.get_all_graph_files()
-        if len(graph_files) > 0:
-            result['folders'].insert(0, {
-                "id": "virtual_graph",
-                "name": "Identity Graph Attachments",
-                "parent_id": None,
-                "item_count": len(graph_files),
-                "created_at": "SYSTEM"
-            })
-            
     return jsonify(result), 200
 
 @dashboard_bp.route('/api/drive/all_folders', methods=['GET'])

@@ -21,9 +21,9 @@ class Manifest(ModuleManifest):
         if path == "" or path == "/":
             return self._render_home(module_name)
         elif path == "/view":
-            return render_template(f"modules/{module_name}/view.html", user=g.user)
+            return render_template(f"modules/{module_name}/subject_edit.html", user=g.user)
         elif path == "/group":
-            return render_template(f"modules/{module_name}/group_view.html", user=g.user)
+            return render_template(f"modules/{module_name}/group_edit.html", user=g.user)
             
         manager = get_graph_manager()
 

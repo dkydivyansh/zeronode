@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Zeronode Data
+data/
+server_data.db
+server_data.db-wal
+server_data.db-shm
+.env
+
+# MacOS
+.DS_Store

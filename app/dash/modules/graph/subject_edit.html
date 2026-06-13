@@ -9,7 +9,7 @@
             <div id="graph-breadcrumbs" class="flex items-center gap-2 font-label text-xs tracking-wider text-on-surface-variant/60 uppercase mb-2">
                 <a href="/app/graph" class="hover:text-primary transition-colors interactive-el root-nav">Identity Graph</a>
                 <span class="text-on-surface-variant/30">/</span>
-                <span class="text-on-surface">Group Details</span>
+                <span class="text-on-surface">Details</span>
             </div>
             <h1 id="det-uuid-title" class="font-headline text-3xl tracking-widest text-[#e5e5e5] uppercase">LOADING...</h1>
         </div>
@@ -25,7 +25,7 @@
         <div class="w-full md:w-1/2 border-r border-outline-variant/20 flex flex-col bg-surface-variant/5 h-full">
             <div class="p-6 border-b border-outline-variant/20 bg-surface-variant/20 flex justify-between items-start">
                 <div>
-                    <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase">GROUP PROFILE</h2>
+                    <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase">IDENTITY PROFILE</h2>
                     <p class="font-mono text-[9px] text-primary uppercase tracking-widest mt-1" id="det-uuid">UUID</p>
                 </div>
                 <button id="btn-show-revisions" class="text-on-surface-variant/50 hover:text-primary transition-colors p-2 bg-surface border border-outline-variant/20 hover:border-primary/50 rounded flex items-center gap-2 shadow-sm" title="View Version History">
@@ -44,12 +44,46 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>
+                <div id="det-gender-badge" class="mt-4 hidden font-mono text-[10px] tracking-widest uppercase border border-primary/20 px-2.5 py-1 rounded bg-primary/5 text-primary/80"></div>
             </div>
             
             <div class="p-6 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
                 <div class="space-y-1">
-                    <label class="font-mono text-[9px] text-primary uppercase tracking-widest">Group Name *</label>
+                    <label class="font-mono text-[9px] text-primary uppercase tracking-widest">Target Name *</label>
                     <input type="text" id="det-name" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-body text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Date of Birth</label>
+                        <input type="date" id="det-dob" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Phone Number</label>
+                        <input type="tel" id="det-phone" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Email Address</label>
+                        <input type="email" id="det-email" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                    </div>
+                    <div class="space-y-1 relative">
+                        <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Gender</label>
+                        <div class="relative w-full">
+                            <select id="det-gender" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors cursor-pointer appearance-none">
+                                <option value="">Unknown</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Transgender">Transgender</option>
+                                <option value="Non-Binary">Non-Binary</option>
+                                <option value="Other">Other...</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-primary">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                        <input type="text" id="det-gender-other" class="hidden mt-2 w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors" placeholder="Specify identity...">
+                    </div>
                 </div>
                 <!-- Dynamic Custom Keys Container -->
                 <div class="flex justify-between items-center pt-4 border-t border-outline-variant/10">
@@ -151,7 +185,8 @@
                 <div class="flex justify-between items-center mb-2">
                     <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Search Target</label>
                     <div class="flex gap-2">
-                        <button id="rel-target-people" class="font-mono text-[9px] px-2 py-0.5 border border-primary/50 text-primary bg-primary/10 transition-colors uppercase pointer-events-none">PEOPLE</button>
+                        <button id="rel-target-people" class="font-mono text-[9px] px-2 py-0.5 border border-primary/50 text-primary bg-primary/10 transition-colors uppercase">PEOPLE</button>
+                        <button id="rel-target-group" class="font-mono text-[9px] px-2 py-0.5 border border-outline-variant/30 text-on-surface-variant/50 hover:text-on-surface transition-colors uppercase">GROUP</button>
                     </div>
                 </div>
                 <input type="text" id="relation-search-input" placeholder="Type name or ID..." class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors" autocomplete="off">
@@ -196,5 +231,5 @@
     }
 </script>
 <script src="{{ url_for('static', filename='vendor/marked.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/group_view.js') }}"></script>
+<script src="{{ url_for('static', filename='js/graph_view.js') }}?v={{ range(1, 999999) | random }}"></script>
 {% endblock %}

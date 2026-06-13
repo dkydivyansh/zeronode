@@ -404,6 +404,6 @@
         }
     });
 </script>
-<script src="{{ url_for('static', filename='js/drive.js') }}?v={{ now_ts }}"></script>
+<script src="{{ url_for('static', filename='js/drive.js') }}?v={{ range(1, 999999) | random }}"></script>
 {% block scripts %}{% endblock %}
 </body></html>
