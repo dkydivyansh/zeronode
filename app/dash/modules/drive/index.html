@@ -1,30 +1,30 @@
 {% extends "shell.html" %}
 
 {% block content %}
-<div class="px-8 py-6 h-full flex flex-col pt-12">
+<div class="px-4 md:px-8 py-4 md:py-6 h-full flex flex-col pt-12">
     
     <!-- Header Area -->
-    <div class="flex justify-between items-end mb-6">
-        <div>
+    <div class="flex flex-col md:flex-row md:justify-between items-start md:items-end gap-4 md:gap-0 mb-6">
+        <div class="w-full md:w-auto min-w-0">
             <!-- Breadcrumbs -->
-            <div id="drive-breadcrumbs" class="flex items-center gap-2 font-label text-xs tracking-wider text-on-surface-variant/60 uppercase mb-2">
+            <div id="drive-breadcrumbs" class="flex items-center gap-2 font-label text-xs tracking-wider text-on-surface-variant/60 uppercase mb-2 overflow-x-auto whitespace-nowrap custom-scrollbar no-scrollbar w-full">
                 <a href="#" class="hover:text-primary transition-colors interactive-el root-nav" data-id="">Drive</a>
                 <!-- JS injected breadcrumbs go here -->
             </div>
-            <h1 id="drive-current-folder" class="font-headline text-3xl tracking-widest text-[#e5e5e5] uppercase">ROOT DIRECTORY</h1>
+            <h1 id="drive-current-folder" class="font-headline text-2xl md:text-3xl tracking-widest text-[#e5e5e5] uppercase truncate w-full">ROOT DIRECTORY</h1>
         </div>
         
         <!-- Controls -->
-        <div class="flex items-center gap-4">
+        <div class="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto justify-start md:justify-end">
             <button id="drive-bulk-preview" class="p-2 text-on-surface-variant/40 hover:text-primary transition-all interactive-el" title="Decrypt All Previews">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
             </button>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-1 md:flex-none">
                 <button id="drive-new-note" class="p-2 text-on-surface-variant/40 hover:text-primary transition-all interactive-el" title="New Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 </button>
-                <div class="relative">
-                    <input type="text" id="drive-search" class="bg-surface-container-high border border-outline-variant/30 text-[#e5e5e5] font-mono text-xs px-4 py-2 w-64 focus:outline-none focus:border-primary transition-colors pl-8 placeholder-on-surface-variant/30" placeholder="Search Drive..."/>
+                <div class="relative flex-1 md:flex-none">
+                    <input type="text" id="drive-search" class="bg-surface-container-high border border-outline-variant/30 text-[#e5e5e5] font-mono text-xs px-4 py-2 w-full md:w-64 focus:outline-none focus:border-primary transition-colors pl-8 placeholder-on-surface-variant/30" placeholder="Search Drive..."/>
                     <svg class="w-4 h-4 text-on-surface-variant/50 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
             </div>
@@ -42,7 +42,7 @@
     </div>
 
     <!-- Dropzone / Main Canvas -->
-    <div id="drive-canvas" class="flex-1 w-full min-h-[200px] border border-outline-variant/20 bg-surface flex flex-col overflow-y-auto relative p-6 transition-colors">
+    <div id="drive-canvas" class="flex-1 w-full min-h-[200px] border border-outline-variant/20 bg-surface flex flex-col overflow-y-auto relative p-4 md:p-6 transition-colors">
         <!-- Drag Overlay -->
         <div id="drag-overlay" class="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary z-30 hidden flex flex-col items-center justify-center backdrop-blur-sm">
             <svg class="w-12 h-12 text-primary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
@@ -64,21 +64,29 @@
 <!-- Hidden File Input for Upload -->
 <input type="file" id="hidden-file-input" multiple class="hidden" />
 
-<!-- Context Menu -->
-<div id="context-menu" class="fixed bg-surface-container-highest border border-outline-variant/30 shadow-2xl z-50 py-1 hidden flex-col min-w-[200px]">
-    <div class="px-3 py-1.5 border-b border-outline-variant/20 mb-1">
-        <span id="ctx-header" class="font-mono text-[9px] text-on-surface-variant/50 truncate block">item.pdf</span>
+<!-- Context Menu Modal -->
+<div id="context-menu" class="fixed inset-0 bg-black/80 z-[120] hidden items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-outline-variant/30 shadow-2xl flex flex-col w-[90vw] md:w-[400px] max-w-full" id="context-menu-box">
+        <div class="px-6 py-5 border-b border-outline-variant/20 mb-1 flex flex-col gap-1 bg-surface-container-highest">
+            <span class="font-mono text-[9px] text-primary uppercase tracking-widest opacity-60">TARGET FILE</span>
+            <span id="ctx-header" class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase truncate block">item.pdf</span>
+        </div>
+        <div class="py-2 flex flex-col gap-1 px-2">
+            <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="download" id="ctx-download">Download & Decrypt</button>
+            <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="rename">Rename</button>
+            <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="move">Move To...</button>
+            <div class="h-[1px] w-full bg-outline-variant/20 my-2"></div>
+            <button class="ctx-btn text-left px-6 py-4 hover:bg-error/10 text-sm font-label tracking-wider uppercase text-error transition-colors w-full interactive-el" data-action="delete">Delete Permanently</button>
+        </div>
+        <div class="px-6 py-4 border-t border-outline-variant/20 bg-surface-variant/20 flex justify-end">
+             <button id="ctx-close-btn" class="font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-4 py-2 interactive-el">Cancel</button>
+        </div>
     </div>
-    <button class="ctx-btn text-left px-4 py-2 hover:bg-surface-variant text-xs font-label tracking-wide uppercase text-on-surface transition-colors w-full" data-action="download" id="ctx-download">Download & Decrypt</button>
-    <button class="ctx-btn text-left px-4 py-2 hover:bg-surface-variant text-xs font-label tracking-wide uppercase text-on-surface transition-colors w-full" data-action="rename">Rename</button>
-    <button class="ctx-btn text-left px-4 py-2 hover:bg-surface-variant text-xs font-label tracking-wide uppercase text-on-surface transition-colors w-full" data-action="move">Move To...</button>
-    <div class="h-[1px] w-full bg-outline-variant/20 my-1"></div>
-    <button class="ctx-btn text-left px-4 py-2 hover:bg-error/10 text-xs font-label tracking-wide uppercase text-error transition-colors w-full" data-action="delete">Delete Permanently</button>
 </div>
 
 <!-- Modal: New Folder -->
-<div id="modal-new-folder" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-surface-container-high border border-outline-variant/30 p-6 w-96 flex flex-col gap-4">
+<div id="modal-new-folder" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-outline-variant/30 p-6 w-[90vw] md:w-96 max-w-full flex flex-col gap-4">
         <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase mb-1">CREATE FOLDER</h2>
         <div class="space-y-1">
             <input type="text" id="new-folder-name" 
@@ -101,17 +109,17 @@
 <!-- Lightbox / Preview Modal -->
 <div id="drive-preview-modal" class="fixed inset-0 bg-black/95 z-[100] hidden flex-col transition-all duration-500 opacity-0 backdrop-blur-xl">
     <!-- Top Info Bar -->
-    <div class="px-8 py-6 border-b border-outline-variant/20 flex justify-between items-start z-10">
-        <div>
-            <h2 id="pv-name" class="font-headline text-2xl tracking-widest text-[#e5e5e5] uppercase truncate max-w-2xl">file_name.png</h2>
-            <div class="flex gap-4 mt-1 font-mono text-[10px] text-on-surface-variant/60 uppercase tracking-widest">
+    <div class="px-4 md:px-8 py-4 md:py-6 border-b border-outline-variant/20 flex justify-between items-start z-10 gap-4">
+        <div class="min-w-0">
+            <h2 id="pv-name" class="font-headline text-lg md:text-2xl tracking-widest text-[#e5e5e5] uppercase truncate w-full">file_name.png</h2>
+            <div class="flex flex-wrap gap-2 md:gap-4 mt-1 font-mono text-[10px] text-on-surface-variant/60 uppercase tracking-widest">
                 <span id="pv-size">0 KB</span>
                 <span id="pv-type">IMAGE/PNG</span>
                 <span id="pv-date">2026-04-03</span>
             </div>
         </div>
-        <button id="pv-close-top" class="text-on-surface-variant hover:text-primary transition-colors">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+        <button id="pv-close-top" class="text-on-surface-variant hover:text-primary transition-colors flex-shrink-0">
+            <svg class="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
     </div>
 
@@ -134,16 +142,16 @@
     </div>
 
     <!-- Bottom Action Bar -->
-    <div id="pv-footer" class="px-8 py-8 border-t border-outline-variant/20 bg-surface-container-high/50 backdrop-blur-md flex justify-between items-center z-10">
-        <div class="flex gap-2">
-            <button id="pv-close-btn" class="font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-6 py-3 border border-outline-variant/30">Close</button>
+    <div id="pv-footer" class="px-4 md:px-8 py-4 md:py-8 border-t border-outline-variant/20 bg-surface-container-high/50 backdrop-blur-md flex flex-col md:flex-row justify-between items-center z-10 gap-4">
+        <div class="flex gap-2 w-full md:w-auto">
+            <button id="pv-close-btn" class="font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-6 py-3 border border-outline-variant/30 w-full md:w-auto">Close</button>
         </div>
-        <div class="flex gap-4">
-            <button id="pv-preview-btn" class="vault-btn !w-auto !px-8 !py-3 flex items-center gap-2">
+        <div class="flex gap-2 md:gap-4 w-full md:w-auto flex-col md:flex-row">
+            <button id="pv-preview-btn" class="vault-btn !w-full md:!w-auto !px-8 !py-3 flex items-center justify-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                 <span>Load Preview</span>
             </button>
-            <button id="pv-download-btn" class="vault-btn !w-auto !px-8 !py-3 flex items-center gap-2 bg-primary text-on-primary">
+            <button id="pv-download-btn" class="vault-btn !w-full md:!w-auto !px-8 !py-3 flex items-center justify-center gap-2 bg-primary text-on-primary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                 <span>Save To Disk</span>
             </button>
@@ -152,11 +160,11 @@
 </div>
 
 <!-- Modal: Move Item -->
-<div id="modal-move-item" class="fixed inset-0 bg-black/80 z-[110] hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-surface-container-high border border-outline-variant/30 p-6 w-[400px] flex flex-col gap-4 shadow-2xl transition-all transform scale-95 opacity-0" id="move-modal-box">
-        <div class="flex justify-between items-center mb-1">
+<div id="modal-move-item" class="fixed inset-0 bg-black/80 z-[110] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-outline-variant/30 p-4 md:p-6 w-[90vw] md:w-[400px] max-w-full flex flex-col gap-4 shadow-2xl transition-all transform scale-95 opacity-0" id="move-modal-box">
+        <div class="flex justify-between items-center mb-1 gap-2">
             <h2 class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase">MOVE ITEM</h2>
-            <span id="move-item-name" class="font-mono text-[9px] text-primary uppercase tracking-tighter truncate max-w-[150px]">filename.ext</span>
+            <span id="move-item-name" class="font-mono text-[9px] text-primary uppercase tracking-tighter truncate w-full md:max-w-[150px] text-right">filename.ext</span>
         </div>
 
         <!-- Move Modal Breadcrumbs -->

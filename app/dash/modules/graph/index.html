@@ -1,0 +1,202 @@
+{% extends "shell.html" %}
+
+{% block content %}
+<div class="px-4 md:px-8 py-6 h-full flex flex-col pt-12">
+    
+    <!-- Header Area -->
+    <div class="flex flex-col md:flex-row justify-between md:items-end mb-6 gap-4">
+        <div>
+            <div id="graph-breadcrumbs" class="flex items-center gap-2 font-label text-xs tracking-wider text-on-surface-variant/60 uppercase mb-2">
+                <a href="#" class="hover:text-primary transition-colors interactive-el root-nav" data-id="">Identity Graph</a>
+            </div>
+            <div class="flex items-center gap-6 mt-1">
+                <h1 id="tab-subjects" class="font-headline text-3xl tracking-widest text-primary uppercase cursor-pointer transition-colors">SUBJECTS</h1>
+                <h1 id="tab-groups" class="font-headline text-3xl tracking-widest text-on-surface-variant/30 hover:text-on-surface-variant uppercase cursor-pointer transition-colors">GROUPS</h1>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="flex items-center gap-4 flex-wrap">
+            <button id="btn-decrypt-visuals" class="font-label text-xs tracking-widest text-on-surface-variant hover:text-primary transition-colors uppercase px-4 py-2 border border-outline-variant/30 hover:bg-surface-variant flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                <span>Decrypt Visuals</span>
+                <div class="btn-loader hidden w-3 h-3 border-2 border-primary/30 border-t-primary animate-spin rounded-full"></div>
+            </button>
+            <div class="relative w-full md:w-auto flex gap-2">
+                <div class="relative w-full md:w-64">
+                    <input type="text" id="graph-search" class="bg-surface-container-high border border-outline-variant/30 text-[#e5e5e5] font-mono text-xs px-4 py-2 w-full focus:outline-none focus:border-primary transition-colors pl-8 placeholder-on-surface-variant/30" placeholder="Search Identities..."/>
+                    <svg class="w-4 h-4 text-on-surface-variant/50 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <button id="btn-deep-search" class="font-label text-xs tracking-widest text-primary hover:text-black hover:bg-primary transition-colors uppercase px-4 py-2 border border-primary/30 flex items-center gap-2 whitespace-nowrap">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z"></path></svg>
+                    <span>Deep Search</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Canvas -->
+    <div id="graph-canvas" class="flex-1 w-full min-h-[200px] border border-outline-variant/20 bg-surface flex flex-col overflow-y-auto relative p-4 md:p-6 transition-colors">
+        
+        <!-- Loading State -->
+        <div id="graph-loader" class="absolute inset-0 flex flex-col items-center justify-center py-20 text-on-surface-variant/30 bg-surface z-20">
+            <div class="vault-spinner mb-4 border-on-surface-variant/30 border-t-primary"></div>
+            <span class="font-mono text-[10px] tracking-widest uppercase">SYNCING SEARCH INDEX...</span>
+        </div>
+
+        <!-- Render Container -->
+        <div id="subject-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 w-full content-start opacity-0 transition-opacity duration-300">
+            <!-- Items injected by JS -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block modals %}
+<!-- Modal: Deep Search -->
+<div id="modal-deep-search" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-primary/30 w-full max-w-2xl flex flex-col shadow-2xl transition-all transform scale-95 opacity-0 overflow-hidden" id="deep-search-box">
+        <div class="p-6 border-b border-primary/20 bg-primary/5 flex justify-between items-start">
+            <div>
+                <h2 class="font-headline text-lg tracking-[0.2em] text-primary uppercase">DEEP SEARCH ENGINE</h2>
+                <p class="font-label text-[10px] text-on-surface-variant/60 uppercase tracking-widest mt-1">Decodes Full Vault Payloads (Heavy Operation)</p>
+            </div>
+            <div id="deep-search-progress" class="hidden text-right">
+                <p class="font-mono text-[10px] text-primary uppercase tracking-widest mb-1">DECRYPTING BATCH...</p>
+                <div class="w-32 h-1 bg-surface-variant overflow-hidden">
+                    <div id="deep-search-bar" class="h-full bg-primary w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+        <div class="p-6 space-y-6">
+            <div class="bg-surface-variant/30 border border-outline-variant/20 p-4">
+                <p class="font-label text-xs text-on-surface-variant uppercase tracking-wider mb-4">Query Builder</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="space-y-1 md:col-span-1">
+                        <label class="font-mono text-[9px] text-on-surface-variant/40 uppercase tracking-widest">Custom Key / Field</label>
+                        <input type="text" id="ds-key" class="w-full bg-surface-container-highest border border-outline-variant/30 text-sm px-3 py-2 text-[#e5e5e5] focus:border-primary focus:outline-none transition-colors" placeholder="e.g. Alias"/>
+                    </div>
+                    <div class="space-y-1 md:col-span-2">
+                        <label class="font-mono text-[9px] text-on-surface-variant/40 uppercase tracking-widest">Value (Contains / Equals)</label>
+                        <input type="text" id="ds-val" class="w-full bg-surface-container-highest border border-outline-variant/30 text-sm px-3 py-2 text-[#e5e5e5] focus:border-primary focus:outline-none transition-colors" placeholder="Match value..."/>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button class="deep-search-close font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-4 py-2 interactive-el">Cancel</button>
+                <button id="btn-run-deep-search" class="font-label text-xs tracking-widest text-black bg-primary hover:bg-primary-dim transition-colors uppercase px-6 py-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <span>EXECUTE QUERY</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: New Subject -->
+<div id="modal-new-subject" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-outline-variant/30 w-full max-w-md flex flex-col shadow-2xl transition-all transform scale-95 opacity-0 overflow-hidden" id="new-subject-box">
+        <div class="p-6 border-b border-outline-variant/20 bg-surface-variant/20">
+            <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase">REGISTER IDENTITY</h2>
+            <p class="font-label text-[10px] text-on-surface-variant/60 uppercase tracking-widest mt-1">ALL FIELDS LOCALLY ENCRYPTED</p>
+        </div>
+        <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <!-- Form Fields -->
+            <div class="space-y-1">
+                <label class="font-mono text-[9px] text-primary uppercase tracking-widest">Target Name *</label>
+                <input type="text" id="subj-name" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-body text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors" placeholder="e.g. John Doe">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-1">
+                    <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Date of Birth</label>
+                    <input type="date" id="subj-dob" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                </div>
+                <div class="space-y-1">
+                    <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Phone Number</label>
+                    <input type="tel" id="subj-phone" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-1">
+                    <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Email Address</label>
+                    <input type="email" id="subj-email" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                </div>
+                <div class="space-y-1 relative">
+                    <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Gender</label>
+                    <div class="relative w-full">
+                        <select id="subj-gender" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors cursor-pointer appearance-none">
+                            <option value="">Unknown</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Transgender">Transgender</option>
+                            <option value="Non-Binary">Non-Binary</option>
+                            <option value="Other">Other...</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-primary">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                    <input type="text" id="subj-gender-other" class="hidden mt-2 w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors" placeholder="Specify identity...">
+                </div>
+            </div>
+
+            <div class="space-y-1">
+                <label class="font-mono text-[9px] text-on-surface-variant/60 uppercase tracking-widest">Intelligence Notes</label>
+                <textarea id="subj-note" rows="3" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-body text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors resize-none" placeholder="Add custom notes here..."></textarea>
+            </div>
+            
+            <div id="subj-error" class="text-error font-mono text-[10px] hidden"></div>
+        </div>
+        <div class="p-6 border-t border-outline-variant/20 bg-surface-variant/10 flex justify-end gap-3">
+            <button class="modal-close font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-4 py-2">Cancel</button>
+            <button id="btn-create-subject" class="vault-btn !w-auto !px-8 flex items-center gap-2">
+                <span class="btn-text">ENCRYPT & SAVE</span>
+                <div class="btn-loader hidden w-3 h-3 border-2 border-background/30 border-t-background animate-spin rounded-full"></div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: New Group -->
+<div id="modal-new-group" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-surface-container-high border border-outline-variant/30 w-full max-w-md flex flex-col shadow-2xl transition-all transform scale-95 opacity-0 overflow-hidden" id="new-group-box">
+        <div class="p-6 border-b border-outline-variant/20 bg-surface-variant/20">
+            <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase">REGISTER GROUP</h2>
+            <p class="font-label text-[10px] text-on-surface-variant/60 uppercase tracking-widest mt-1">ALL FIELDS LOCALLY ENCRYPTED</p>
+        </div>
+        <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <!-- Form Fields -->
+            <div class="space-y-1">
+                <label class="font-mono text-[9px] text-primary uppercase tracking-widest">Group Name *</label>
+                <input type="text" id="group-name" class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-body text-sm px-4 py-2 focus:outline-none focus:border-primary transition-colors" placeholder="e.g. Syndicate X">
+            </div>
+            
+            <div id="group-error" class="text-error font-mono text-[10px] hidden"></div>
+        </div>
+        <div class="p-6 border-t border-outline-variant/20 bg-surface-variant/10 flex justify-end gap-3">
+            <button class="modal-close font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-4 py-2">Cancel</button>
+            <button id="btn-create-group" class="vault-btn !w-auto !px-8 flex items-center gap-2">
+                <span class="btn-text">ENCRYPT & SAVE</span>
+                <div class="btn-loader hidden w-3 h-3 border-2 border-background/30 border-t-background animate-spin rounded-full"></div>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block dynamic_menu %}
+<button id="btn-open-new-subject" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2">
+    <span>+ IDENTITY</span>
+</button>
+<button id="btn-open-new-group" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2 !bg-surface-variant/20 !border-outline-variant/30 hover:!border-primary/50 !text-[#e5e5e5]">
+    <span>+ GROUP</span>
+</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/drive.js') }}"></script>
+<script src="{{ url_for('static', filename='js/graph.js') }}"></script>
+{% endblock %}

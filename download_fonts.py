@@ -10,8 +10,9 @@ FONT_URLS = [
     "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
 ]
 
-TARGET_CSS_DIR = r"x:\projects\valt\app\static\css"
-TARGET_FONTS_DIR = r"x:\projects\valt\app\static\fonts"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TARGET_CSS_DIR = os.path.join(BASE_DIR, "app", "static", "css")
+TARGET_FONTS_DIR = os.path.join(BASE_DIR, "app", "static", "fonts")
 
 os.makedirs(TARGET_CSS_DIR, exist_ok=True)
 os.makedirs(TARGET_FONTS_DIR, exist_ok=True)

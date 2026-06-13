@@ -74,7 +74,7 @@
     </div>
 
     <!-- Widgets Container -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start pb-12">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start pb-12">
         
         <!-- Identity Card -->
         <div class="border border-outline-variant/20 p-8 bg-surface-container/30 h-full">
@@ -90,25 +90,25 @@
                 </div>
                 {% endif %}
                 <!-- Details -->
-                <div class="grid grid-cols-2 gap-y-4 gap-x-8 flex-1">
-                    <div>
+                <div class="grid grid-cols-2 gap-y-4 gap-x-8 flex-1 min-w-0">
+                    <div class="min-w-0">
                         <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">NAME</p>
-                        <p class="font-label text-sm text-on-surface">{{ user.first_name }} {{ user.last_name }}</p>
+                        <p class="font-label text-sm text-on-surface truncate" title="{{ user.first_name }} {{ user.last_name }}">{{ user.first_name }} {{ user.last_name }}</p>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">EMAIL</p>
-                        <p class="font-label text-sm text-on-surface">{{ masked_email }}</p>
+                        <p class="font-label text-sm text-on-surface truncate" title="{{ masked_email }}">{{ masked_email }}</p>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">USER ID</p>
-                        <p class="font-mono text-[11px] text-on-surface-variant/60">{{ user.user_id }}</p>
+                        <p class="font-mono text-[11px] text-on-surface-variant/60 truncate" title="{{ user.user_id }}">{{ user.user_id }}</p>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">SESSION TTL</p>
                         {% if session_remaining > 0 %}
-                        <p class="font-mono text-[11px] text-on-surface-variant/60">{{ hours_left }}h {{ mins_left }}m remaining</p>
+                        <p class="font-mono text-[11px] text-on-surface-variant/60 truncate">{{ hours_left }}h {{ mins_left }}m remaining</p>
                         {% else %}
-                        <p class="font-mono text-[11px] text-error">Session expired</p>
+                        <p class="font-mono text-[11px] text-error truncate">Session expired</p>
                         {% endif %}
                     </div>
                 </div>
@@ -135,6 +135,30 @@
             <div class="mt-8 flex justify-end">
                 <div class="font-label text-[10px] tracking-widest text-primary border border-primary/20 px-6 py-3 group-hover:bg-primary group-hover:text-black transition-all duration-500 uppercase font-bold">
                     Open Vault
+                </div>
+            </div>
+        </a>
+
+        <!-- Graph Shortcut Widget -->
+        <a href="/app/graph" class="border border-outline-variant/20 p-8 bg-surface-container/30 group hover:border-primary/40 transition-all duration-500 h-full flex flex-col justify-between interactive-el group">
+            <div>
+                <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-6 uppercase">Intelligence Map</p>
+                <div class="flex items-center gap-6">
+                    <div class="w-16 h-16 bg-primary/5 border border-primary/20 flex items-center justify-center group-hover:bg-primary/10 group-hover:border-primary/40 transition-all duration-700">
+                        <svg class="w-8 h-8 text-primary/60 group-hover:text-primary transition-all duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="font-headline text-xl tracking-widest text-on-surface uppercase mb-1">IDENTITY GRAPH</h2>
+                        <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase">Zero-Knowledge Profiles</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex justify-end">
+                <div class="font-label text-[10px] tracking-widest text-primary border border-primary/20 px-6 py-3 group-hover:bg-primary group-hover:text-black transition-all duration-500 uppercase font-bold">
+                    Open Graph
                 </div>
             </div>
         </a>

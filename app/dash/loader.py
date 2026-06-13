@@ -16,6 +16,7 @@ from app.routes.auth import get_current_user
 REGISTERED_MODULES = [
     "home",
     "drive",
+    "graph",
     "admin",
 ]
 # ─────────────────────────────────────────────────────────────────────

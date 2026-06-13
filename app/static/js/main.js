@@ -17,6 +17,18 @@ function base64ToBuffer(base64) {
   return bytes.buffer;
 }
 
+function deterministicStringify(obj) {
+    if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+    if (Array.isArray(obj)) return `[${obj.map(deterministicStringify).join(',')}]`;
+    const keys = Object.keys(obj).sort();
+    let str = '{';
+    for (let i = 0; i < keys.length; i++) {
+        if (i > 0) str += ',';
+        str += JSON.stringify(keys[i]) + ':' + deterministicStringify(obj[keys[i]]);
+    }
+    return str + '}';
+}
+
 class VaultCrypto {
   static async generateECDHKeys() {
     return await crypto.subtle.generateKey(
@@ -941,6 +953,8 @@ class ZNodeDialog {
     this._body = document.getElementById("znode-dialog-body");
     this._inputCnt = document.getElementById("znode-dialog-input-container");
     this._input = document.getElementById("znode-dialog-input");
+    this._textarea = document.getElementById("znode-dialog-textarea");
+    this._select = document.getElementById("znode-dialog-select");
     this._cancelBtn = document.getElementById("znode-dialog-cancel");
     this._confirmBtn = document.getElementById("znode-dialog-confirm");
   }
@@ -950,6 +964,7 @@ class ZNodeDialog {
     body = "",
     type = "alert",
     defaultValue = "",
+    options = [],
   }) {
     this._init();
     if (!this._container) return false;
@@ -963,9 +978,39 @@ class ZNodeDialog {
       this._title.innerText = title;
       this._body.innerText = body;
       this._input.value = defaultValue;
+      if (this._textarea) this._textarea.value = defaultValue;
+      
+      if (this._select) {
+          this._select.innerHTML = "";
+          options.forEach(opt => {
+              const optionEl = document.createElement("option");
+              optionEl.value = opt.value;
+              optionEl.innerText = opt.label;
+              optionEl.className = "bg-[#111111] text-[#e5e5e5]";
+              if (opt.value === defaultValue) optionEl.selected = true;
+              this._select.appendChild(optionEl);
+          });
+      }
 
-      if (type === "prompt") this._inputCnt.classList.remove("hidden");
-      else this._inputCnt.classList.add("hidden");
+      if (type === "prompt" || type === "prompt-multiline" || type === "select") {
+          this._inputCnt.classList.remove("hidden");
+          this._inputCnt.classList.add("flex");
+          
+          if (this._input) this._input.classList.add("hidden");
+          if (this._textarea) this._textarea.classList.add("hidden");
+          if (this._select) this._select.classList.add("hidden");
+          
+          if (type === "prompt-multiline") {
+              if (this._textarea) this._textarea.classList.remove("hidden");
+          } else if (type === "select") {
+              if (this._select) this._select.classList.remove("hidden");
+          } else {
+              if (this._input) this._input.classList.remove("hidden");
+          }
+      } else {
+          this._inputCnt.classList.add("hidden");
+          this._inputCnt.classList.remove("flex");
+      }
 
       if (type === "alert") this._cancelBtn.classList.add("hidden");
       else this._cancelBtn.classList.remove("hidden");
@@ -976,6 +1021,8 @@ class ZNodeDialog {
         this._box.classList.remove("scale-95", "opacity-0");
         this._box.classList.add("scale-100", "opacity-100");
         if (type === "prompt") this._input.focus();
+        else if (type === "prompt-multiline" && this._textarea) this._textarea.focus();
+        else if (type === "select" && this._select) this._select.focus();
         else this._confirmBtn.focus();
       }, 50);
 
@@ -992,11 +1039,16 @@ class ZNodeDialog {
 
       this._confirmBtn.onclick = () => {
         if (type === "prompt") cleanup(this._input.value);
+        else if (type === "prompt-multiline") cleanup(this._textarea ? this._textarea.value : "");
+        else if (type === "select") cleanup(this._select ? this._select.value : "");
         else cleanup(true);
       };
-      this._cancelBtn.onclick = () => cleanup(type === "prompt" ? null : false);
+      this._cancelBtn.onclick = () => cleanup((type === "prompt" || type === "prompt-multiline" || type === "select") ? null : false);
       window.onkeydown = (e) => {
-        if (e.key === "Enter") this._confirmBtn.click();
+        if (e.key === "Enter") {
+            if (type === "prompt-multiline" && !e.ctrlKey) return;
+            this._confirmBtn.click();
+        }
         if (e.key === "Escape") this._cancelBtn.click();
       };
     });
@@ -1011,5 +1063,61 @@ class ZNodeDialog {
   static prompt(title, body, def = "") {
     return this.show({ title, body, type: "prompt", defaultValue: def });
   }
+  static promptMultiline(title, body, def = "") {
+    return this.show({ title, body, type: "prompt-multiline", defaultValue: def });
+  }
+  static select(title, body, options = [], def = "") {
+    return this.show({ title, body, type: "select", defaultValue: def, options });
+  }
 }
 window.ZNodeDialog = ZNodeDialog;
+
+// Global Toast Notification
+function showZNodeToast(message, type = "info", onClick = null) {
+  let container = document.getElementById("znode-toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "znode-toast-container";
+    container.className =
+      "fixed top-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  const colorClass =
+    type === "error"
+      ? "border-error text-error bg-error/10"
+      : "border-primary text-primary bg-primary/10";
+
+  toast.className = `w-80 px-6 py-4 border-l-4 ${colorClass} backdrop-blur-xl shadow-2xl font-mono text-[10px] uppercase tracking-widest transform transition-all duration-500 translate-x-full opacity-0 pointer-events-auto`;
+  toast.innerHTML = `
+        <div class="flex items-start gap-4">
+            <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                ${type === "error" ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'}
+            </svg>
+            <span class="break-words">${message}</span>
+        </div>
+    `;
+
+  if (onClick) {
+    toast.classList.add("cursor-pointer", "hover:border-primary");
+    toast.onclick = () => {
+      onClick();
+      toast.remove();
+    };
+  }
+
+  container.appendChild(toast);
+
+  // Slide In
+  setTimeout(() => {
+    toast.classList.remove("translate-x-full", "opacity-0");
+  }, 100);
+
+  // Slide Out & Remove
+  setTimeout(() => {
+    toast.classList.add("translate-x-full", "opacity-0");
+    setTimeout(() => toast.remove(), 500);
+  }, 5000);
+}
+window.showZNodeToast = showZNodeToast;

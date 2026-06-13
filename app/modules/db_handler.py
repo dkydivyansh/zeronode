@@ -4,7 +4,7 @@ import secrets
 import time
 import shutil
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'server_data.db')
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'server_data.db')
 
 def _get_conn():
     """Get a new database connection with row_factory for dict-like access."""
@@ -285,9 +285,8 @@ def validate_session(token: str) -> dict | None:
     conn = _get_conn()
     now = int(time.time())
 
-    # Purge expired sessions (background cleanup)
-    conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
-    conn.commit()
+    # Removed synchronous DELETE to prevent SD card I/O locks on every HTTP request.
+    # The SELECT query below already filters by `expires_at > now`, so expired sessions are safely ignored.
 
     row = conn.execute("""
         SELECT s.user_id, s.expires_at

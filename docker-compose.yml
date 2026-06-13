@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  zeronode:
+    build: .
+    container_name: zeronode_app
+    ports:
+      - "8862:8862"
+    volumes:
+      # Mount the entire application directory to ensure that server_data.db, 
+      # its SQLite WAL/SHM files, the /data vault, and .env are perfectly persisted 
+      # and easily accessible from your host machine.
+      - .:/app
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped

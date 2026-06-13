@@ -1,3 +1,5 @@
+const FILE_API = window.location.pathname.startsWith('/app/graph') ? '/app/graph/api/file' : '/app/api/file';
+
 // --- 1. Global State & Task Registry ---
 let activeTransfers = 0;
 const activeTaskSignals = new Map(); // uuid -> Promise
@@ -225,17 +227,17 @@ async function updateCacheCountUI() {
       req.onerror = () => reject(req.error);
     });
 
-    const btn = document.getElementById("dynamic-cache");
-    if (btn) {
+    const btns = document.querySelectorAll(".dynamic-cache-btn");
+    btns.forEach(btn => {
       btn.innerHTML = `CACHE [${count}]`;
       btn.classList.remove("hidden");
 
       if (count > 0) {
         btn.className =
-          "font-mono text-[9px] tracking-widest text-error border border-error/40 bg-error/5 px-2 py-0.5 hover:bg-error hover:text-black transition-all interactive-el uppercase ml-4";
+          "dynamic-cache-btn font-mono text-[9px] tracking-widest text-error border border-error/40 bg-error/5 px-2 py-0.5 hover:bg-error hover:text-black transition-all interactive-el uppercase md:ml-4";
       } else {
         btn.className =
-          "font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase ml-4";
+          "dynamic-cache-btn font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase md:ml-4";
       }
 
       btn.onclick = async () => {
@@ -248,7 +250,7 @@ async function updateCacheCountUI() {
           await clearCache();
         }
       };
-    }
+    });
   } catch (e) {
     console.error("[CacheUI] Error:", e);
   }
@@ -450,53 +452,7 @@ function failTransfer(id) {
   }
 }
 
-function showZNodeToast(message, type = "info", onClick = null) {
-  let container = document.getElementById("znode-toast-container");
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "znode-toast-container";
-    container.className =
-      "fixed top-6 right-6 z-[9999] flex flex-col items-end gap-3 pointer-events-none";
-    document.body.appendChild(container);
-  }
-
-  const toast = document.createElement("div");
-  const colorClass =
-    type === "error"
-      ? "border-error text-error bg-error/10"
-      : "border-primary text-primary bg-primary/10";
-
-  toast.className = `w-80 px-6 py-4 border-l-4 ${colorClass} backdrop-blur-xl shadow-2xl font-mono text-[10px] uppercase tracking-widest transform transition-all duration-500 translate-x-full opacity-0 pointer-events-auto`;
-  toast.innerHTML = `
-        <div class="flex items-start gap-4">
-            <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                ${type === "error" ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>' : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'}
-            </svg>
-            <span class="break-words">${message}</span>
-        </div>
-    `;
-
-  if (onClick) {
-    toast.classList.add("cursor-pointer", "hover:border-primary");
-    toast.onclick = () => {
-      onClick();
-      toast.remove();
-    };
-  }
-
-  container.appendChild(toast);
-
-  // Slide In
-  setTimeout(() => {
-    toast.classList.remove("translate-x-full", "opacity-0");
-  }, 100);
-
-  // Slide Out & Remove
-  setTimeout(() => {
-    toast.classList.add("translate-x-full", "opacity-0");
-    setTimeout(() => toast.remove(), 500);
-  }, 5000);
-}
+// Removed showZNodeToast, now in main.js
 
 // --- 5. Drive Rendering & Logic (Conditional) ---
 let currentFolderId = null;
@@ -611,7 +567,7 @@ async function createNewNote() {
     const fileKey = await DriveCrypto.generateFileKey();
     const wrappedKey64 = await DriveCrypto.wrapFileKey(fileKey, masterKey);
 
-    const initRes = await fetch("/app/api/file/init", {
+    const initRes = await fetch(`${FILE_API}/init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -631,7 +587,7 @@ async function createNewNote() {
       arrayBuf,
     );
 
-    await fetch(`/app/api/file/${uuid}/chunk`, {
+    await fetch(`${FILE_API}/${uuid}/chunk`, {
       method: "POST",
       headers: {
         "X-Chunk-Offset": "0",
@@ -640,7 +596,7 @@ async function createNewNote() {
       body: enc,
     });
 
-    await fetch(`/app/api/file/${uuid}/finalize`, { method: "POST" });
+    await fetch(`${FILE_API}/${uuid}/finalize`, { method: "POST" });
 
     completeTransfer(tfId);
     showZNodeToast(`NOTE CREATED: ${title}`, "info");
@@ -937,7 +893,7 @@ function initMarkdownEditor(uuid, fileName, content) {
         // Fetch metadata (with server fallback if cache is stale/missing)
         let metadata = metadataCache.get(uuid);
         if (!metadata || !metadata.aes_key) {
-          const metaRes = await fetch(`/app/api/file/${uuid}/meta`);
+          const metaRes = await fetch(`${FILE_API}/${uuid}/meta`);
           if (!metaRes.ok) throw new Error("Failed to retrieve file metadata.");
           metadata = await metaRes.json();
           metadataCache.set(uuid, metadata);
@@ -970,7 +926,7 @@ function initMarkdownEditor(uuid, fileName, content) {
           arrayBuf,
         );
 
-        const res = await fetch(`/app/api/file/${uuid}/content`, {
+        const res = await fetch(`${FILE_API}/${uuid}/content`, {
           method: "PUT",
           headers: { "Content-Type": "application/octet-stream" },
           body: enc,
@@ -1104,6 +1060,9 @@ function renderItem(item) {
 
     return `
         <div class="col-span-1 min-h-[160px] border border-outline-variant/20 bg-surface-container-high hover:bg-surface-variant transition-colors p-4 flex flex-col items-center justify-center cursor-pointer interactive-el group relative drive-item overflow-hidden" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}" ${previewStyle}>
+            <button class="ctx-btn absolute top-2 right-2 p-1 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary bg-surface-container-highest/80 rounded backdrop-blur-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+            </button>
             ${bgLayer}
             <div class="relative z-10 flex flex-col items-center justify-center w-full">
                 ${iconHtml}
@@ -1114,13 +1073,16 @@ function renderItem(item) {
   }
 
   return `
-    <div class="col-span-full border-b border-outline-variant/10 hover:bg-surface-variant transition-colors py-2 px-4 flex items-center justify-between cursor-pointer interactive-el drive-item" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}">
-        <div class="flex items-center gap-3 w-1/2">
+    <div class="col-span-full border-b border-outline-variant/10 hover:bg-surface-variant transition-colors py-2 px-4 flex items-center justify-between cursor-pointer interactive-el drive-item relative group" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}">
+        <div class="flex items-center gap-3 w-[60%] md:w-1/2">
             ${iconList}
-            <span class="font-label text-sm tracking-wide text-on-surface truncate">${getNameWithoutMD(item.name || item.file_name)}</span>
+            <span class="font-label text-sm tracking-wide text-on-surface truncate pr-2">${getNameWithoutMD(item.name || item.file_name)}</span>
         </div>
-        <div class="font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${sizeStr}</div>
-        <div class="font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${new Date(item.modified).toLocaleDateString()}</div>
+        <div class="hidden md:block font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${sizeStr}</div>
+        <div class="hidden md:block font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${new Date(item.modified).toLocaleDateString()}</div>
+        <button class="ctx-btn md:absolute right-4 p-2 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+        </button>
     </div>`;
 }
 
@@ -1147,6 +1109,21 @@ function renderDrive(contents) {
   container.innerHTML = [...folders, ...files].map(renderItem).join("");
 
   document.querySelectorAll(".drive-item").forEach((el) => {
+    const ctxBtn = el.querySelector(".ctx-btn");
+    if (ctxBtn) {
+      ctxBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Calculate dropdown position
+        const rect = ctxBtn.getBoundingClientRect();
+        // Fallback to pageX if needed, but rect is safer for touch
+        const x = e.pageX || rect.left;
+        const y = e.pageY || rect.bottom;
+        showContextMenu(x, y, el.dataset);
+      });
+    }
+
     el.addEventListener("click", () => {
       if (el.dataset.type === "folder") fetchDrive(el.dataset.id);
       else openLightbox(el.dataset);
@@ -1166,8 +1143,6 @@ function showContextMenu(x, y, dataset) {
   activeCtxItem = dataset;
   if (ctxHeader) ctxHeader.innerText = dataset.name;
   if (ctxDl) ctxDl.style.display = dataset.type === "folder" ? "none" : "block";
-  ctxMenu.style.left = `${x}px`;
-  ctxMenu.style.top = `${y}px`;
   ctxMenu.classList.remove("hidden");
   ctxMenu.classList.add("flex");
 }
@@ -1432,14 +1407,26 @@ function initDriveControls() {
   // Context Menu Auto-Hide
   window.addEventListener("click", (e) => {
     const ctxMenu = document.getElementById("context-menu");
+    const ctxBox = document.getElementById("context-menu-box");
     if (ctxMenu && !ctxMenu.classList.contains("hidden")) {
-      // Only hide if we're clicking outside the menu
-      if (!ctxMenu.contains(e.target)) {
+      // If they clicked the overlay background (ctxMenu) or anything outside the box
+      if (e.target === ctxMenu || (ctxBox && !ctxBox.contains(e.target) && !e.target.closest('.ctx-btn'))) {
         ctxMenu.classList.add("hidden");
         ctxMenu.classList.remove("flex");
       }
     }
   });
+
+  const ctxCloseBtn = document.getElementById("ctx-close-btn");
+  if (ctxCloseBtn) {
+    ctxCloseBtn.onclick = () => {
+      const ctxMenu = document.getElementById("context-menu");
+      if (ctxMenu) {
+        ctxMenu.classList.add("hidden");
+        ctxMenu.classList.remove("flex");
+      }
+    };
+  }
 
   // Drag and Drop Upload
   const canvas = document.getElementById("drive-canvas");
@@ -1792,8 +1779,9 @@ function initDriveControls() {
   if (upBtn && upInput) {
     upBtn.onclick = () => upInput.click();
     upInput.onchange = (e) => {
-      for (let i = 0; i < e.target.files.length; i++)
-        uploadFile(e.target.files[i]);
+      for (let i = 0; i < e.target.files.length; i++) {
+        processUploadQueue(e.target.files[i]);
+      }
       e.target.value = "";
     };
   }
@@ -1892,7 +1880,7 @@ async function processUploadQueue(file) {
   }
 }
 
-async function uploadFile(file, tfId) {
+async function uploadFile(file, tfId, entityType = "subject") {
   if (!file) return;
   if (file.size === 0 && !file.name.endsWith(".md")) {
     failTransfer(tfId);
@@ -1911,13 +1899,15 @@ async function uploadFile(file, tfId) {
     const fileKey = await DriveCrypto.generateFileKey();
     const wrappedKey64 = await DriveCrypto.wrapFileKey(fileKey, masterKey);
 
-    const initRes = await fetchWithRetry("/app/api/file/init", {
+    const initRes = await fetchWithRetry(`${FILE_API}/init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         file_name: file.name,
         aes_key: wrappedKey64,
-        folder_id: currentFolderId,
+        folder_id: window.currentSubjectUuid ? null : currentFolderId,
+        subject_uuid: window.currentSubjectUuid || null,
+        entity_type: entityType
       }),
     });
     const { uuid } = await initRes.json();
@@ -1942,7 +1932,7 @@ async function uploadFile(file, tfId) {
       // Only cache in RAM/IndexedDB if it's a manageable size
       if (!isLarge) cipherChunks.push(enc);
 
-      await fetchWithRetry(`/app/api/file/${uuid}/chunk`, {
+      await fetchWithRetry(`${FILE_API}/${uuid}/chunk`, {
         method: "POST",
         headers: {
           "X-Chunk-Offset": cOff.toString(),
@@ -1957,7 +1947,7 @@ async function uploadFile(file, tfId) {
       updateTransfer(tfId, (offset / file.size) * 100);
     }
 
-    await fetchWithRetry(`/app/api/file/${uuid}/finalize`, { method: "POST" });
+    await fetchWithRetry(`${FILE_API}/${uuid}/finalize`, { method: "POST" });
 
     if (!isLarge && ext !== "md") {
       try {
@@ -1968,6 +1958,7 @@ async function uploadFile(file, tfId) {
     completeTransfer(tfId);
     showZNodeToast(`UPLOADED: ${file.name}`, "info");
     if (document.getElementById("item-container")) fetchDrive(currentFolderId);
+    return uuid;
   } catch (err) {
     console.error(err);
     failTransfer(tfId);
@@ -1997,7 +1988,7 @@ async function downloadFile(uuid, name, returnBlob = false) {
       // STEP 1: The Gatekeeper (Metadata First)
       let metadata = metadataCache.get(uuid);
       if (!metadata) {
-        const r = await fetch(`/app/api/file/${uuid}/meta`);
+        const r = await fetch(`${FILE_API}/${uuid}/meta`);
         if (!r.ok)
           throw new Error(
             r.status === 404
@@ -2028,7 +2019,7 @@ async function downloadFile(uuid, name, returnBlob = false) {
       if (diskCached) {
         encryptedBytes = await diskCached.blob.arrayBuffer();
       } else {
-        const res = await fetch(`/app/api/file/${uuid}`);
+        const res = await fetch(`${FILE_API}/${uuid}`);
         const reader = res.body.getReader();
         let received = 0,
           chunks = [];
@@ -2139,7 +2130,7 @@ async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
       const end = Math.min((chunkIdx + 1) * CHUNK_WITH_TAG - 1, fileSize - 1);
 
       try {
-        const res = await fetch(`/app/api/file/${uuid}`, {
+        const res = await fetch(`${FILE_API}/${uuid}`, {
           headers: { Range: `bytes=${start}-${end}` },
         });
         if (!res.ok) throw new Error(`Chunk ${chunkIdx} fetch failed`);
@@ -2384,6 +2375,8 @@ async function moveItem(id, type, name) {
         folderId ? `/app/api/drive/list/${folderId}` : "/app/api/drive/list",
       );
       const data = await res.json();
+
+      const FILE_API = window.location.pathname.startsWith('/app/graph') ? '/app/graph/api/file' : '/app/api/file';
 
       // We only care about folders that aren't the one we are currently moving
       const folders = data.folders.filter((f) => f.id !== id);

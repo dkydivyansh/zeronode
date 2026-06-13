@@ -168,9 +168,12 @@ class UserDataManager:
 
             for row in stale_files:
                 f_uuid = row['uuid']
-                # 2. File Delete
                 f_path = os.path.join(self.user_dir, f"{f_uuid}.bin")
+                
+                # Check OS level mtime to ensure we don't delete an actively uploading file
                 if os.path.exists(f_path):
+                    if time.time() - os.path.getmtime(f_path) < 300:
+                        continue  # File was written to recently, skip cleanup
                     try: os.remove(f_path)
                     except OSError: pass
                 
@@ -193,14 +196,6 @@ class UserDataManager:
         with open(file_path, 'r+b') as f:
             f.seek(offset)
             f.write(chunk_bytes)
-            f.flush()
-            os.fsync(f.fileno())
-
-        # 3. Bump last_modified timestamp
-        now_ts = datetime.now(timezone.utc).isoformat()
-        with self._get_conn() as conn:
-            conn.execute("UPDATE files SET last_modified = ? WHERE uuid = ?", (now_ts, file_uuid))
-            conn.commit()
 
         return True
 
