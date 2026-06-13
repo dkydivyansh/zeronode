@@ -6,6 +6,15 @@ import json
 from functools import wraps
 from flask import Blueprint, redirect, request, make_response, current_app, g, abort
 from app.modules import db_handler
+import socket
+
+# Docker often fails with IPv6 resolution ("Network is unreachable"). Force IPv4 globally for this module.
+_old_getaddrinfo = socket.getaddrinfo
+def _getaddrinfo_ipv4(*args, **kwargs):
+    res = _old_getaddrinfo(*args, **kwargs)
+    # Filter out IPv6 (AF_INET6)
+    return [r for r in res if r[0] == socket.AF_INET]
+socket.getaddrinfo = _getaddrinfo_ipv4
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
