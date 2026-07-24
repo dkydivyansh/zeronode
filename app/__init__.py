@@ -35,14 +35,14 @@ def create_app(config_name='dev'):
     def set_secure_headers(response):
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://sso.dkydivyansh.com; "
+            "script-src 'self' 'unsafe-inline' https://sso.sixthminds.com; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob: https://sso.dkydivyansh.com; "
+            "img-src 'self' data: blob: https://sso.sixthminds.com; "
             "font-src 'self'; "
             "media-src 'self' blob:; "
-            "connect-src 'self' https://sso.dkydivyansh.com blob:; "
+            "connect-src 'self' https://sso.sixthminds.com blob:; "
             "worker-src 'self' blob:; "
-            "frame-src 'self' data: blob: https://sso.dkydivyansh.com; "
+            "frame-src 'self' data: blob: https://sso.sixthminds.com; "
             "object-src 'self' blob:;"
         )
         # 2. Strict Cross-Origin Isolation (Stops IDM and 3rd party interference)

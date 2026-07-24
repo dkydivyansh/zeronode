@@ -63,7 +63,7 @@ x:\projects\valt\
 User → /login → "AUTH WITH DKYDIVYANSH SSO"
   → /auth/login
       Sets sso_state cookie (CSRF protection, 5 min TTL)
-      Redirects to: sso.dkydivyansh.com/api/authorize?client_id=...&scope=...&state=...
+      Redirects to: sso.sixthminds.com/api/authorize?client_id=...&scope=...&state=...
 
 SSO → User logs in & consents → redirects to:
   /auth/callback?code=<JWT>&state=<original_state>

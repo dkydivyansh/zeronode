@@ -50,6 +50,7 @@ def login_required(f):
 def sso_login():
     """Redirect user to Dkydivyansh SSO authorize page."""
     cfg = current_app.config
+    current_app.logger.debug(f"SSO login using SSO_BASE_URL={cfg['SSO_BASE_URL']}")
     state = secrets.token_urlsafe(32)
 
     # Store state in a short-lived cookie for CSRF verification

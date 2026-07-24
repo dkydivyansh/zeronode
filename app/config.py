@@ -18,7 +18,7 @@ class Config:
     DATA_DIR          = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'))
 
     # ─── SSO Configuration ──────────────────────────────────────────
-    SSO_BASE_URL      = "https://sso.dkydivyansh.com"
+    SSO_BASE_URL      = os.environ.get('SSO_BASE_URL', 'https://sso.sixthminds.com')
     SSO_CLIENT_ID     = os.environ.get('SSO_CLIENT_ID', '')
     SSO_CLIENT_SECRET = os.environ.get('SSO_CLIENT_SECRET', '')
     SSO_REDIRECT_URI  = os.environ.get('SSO_REDIRECT_URI', 'http://127.0.0.1:5000/auth/callback')
