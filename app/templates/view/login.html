@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
-<title>ZERONODE // INITIALIZATION</title>
+<title>ZeroNode // Sign In</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
 <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}"/>
@@ -148,13 +148,13 @@ body {
 <!-- Action Area -->
 <div class="w-full space-y-8 flex flex-col items-center">
 <a href="/auth/login" class="group relative px-12 py-4 border border-outline hover:border-primary transition-all duration-500 interactive-el">
-<span class="relative z-10 font-label text-xs tracking-[0.4em] text-primary group-hover:text-on-background">AUTH WITH DKYDIVYANSH SSO</span>
+<span class="relative z-10 font-label text-xs tracking-[0.4em] text-primary group-hover:text-on-background">SIGN IN WITH DKYDIVYANSH SSO</span>
 <div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
 </a>
 <div class="max-w-xs text-center">
 <p class="font-label text-[10px] text-slate-400 tracking-wider leading-relaxed">
-                        WHITELIST REQUIRED FOR ACCESS. INITIALIZATION DENIED FOR UNLISTED NODES.
-                    </p>
+    Access is restricted to authorized accounts.
+</p>
 </div>
 </div>
 
@@ -175,11 +175,6 @@ body {
     ZERONODE
 </div>
 <div class="flex items-center gap-8 font-label text-[10px] tracking-widest uppercase">
-    <div class="hidden md:flex gap-6 items-center">
-        <span class="text-slate-500">ENCRYPTION: AES-256</span>
-        <span class="text-slate-500">PROTOCOL: SSO</span>
-        <span class="text-slate-100 font-bold">NODE: SINGULARITY</span>
-    </div>
     <div class="text-slate-100 opacity-50">
         ZERONODE // DKYDIVYANSH.COM // 2025
     </div>

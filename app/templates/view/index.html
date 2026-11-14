@@ -197,11 +197,11 @@
 
 <div class="fixed top-1/2 left-1/4 hidden lg:block font-mono text-sm text-on-surface-variant/10 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre select-none">
 <span class="scramble-text" data-original='{
-  "NODE": "SINGULARITY",
-  "HASH": "f38a91c122e05d78"
+  "protocol": "ZeroKnowledge",
+  "hash": "f38a91c122e05d78"
 }'>{
-  "NODE": "SINGULARITY",
-  "HASH": "f38a91c122e05d78"
+  "protocol": "ZeroKnowledge",
+  "hash": "f38a91c122e05d78"
 }</span>
 </div>
 
@@ -243,23 +243,16 @@
     ZERONODE
 </h1>
 <p class="font-label text-[9px] sm:text-xs md:text-sm tracking-[0.25em] sm:tracking-[0.38em] md:tracking-[0.5em] pl-[0.25em] sm:pl-[0.38em] md:pl-[0.5em] text-secondary uppercase mb-6 sm:mb-8 md:mb-12 select-none leading-relaxed">
-    THE SINGULARITY OF DATA
+    ZERO-KNOWLEDGE ENCRYPTED STORAGE
 </p>
 <div class="flex flex-col items-center gap-5 sm:gap-8">
 <!-- Action -->
 <a href="{% if user %}/app/home{% else %}/login{% endif %}" class="group relative px-8 py-3.5 sm:px-12 sm:py-4 border border-outline hover:border-primary active:border-primary active:bg-primary/10 transition-all duration-300 sm:duration-500 interactive-el touch-manipulation">
     <span class="relative z-10 font-label text-[11px] sm:text-xs tracking-[0.3em] sm:tracking-[0.4em] pl-[0.3em] sm:pl-[0.4em] text-primary group-hover:text-on-background select-none">
-        {% if user %}ENTER SYSTEM{% else %}INITIALIZE{% endif %}
+        {% if user %}OPEN DASHBOARD{% else %}SIGN IN{% endif %}
     </span>
     <div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
 </a>
-<!-- Technical Details -->
-<div class="flex flex-col items-center gap-2 opacity-60">
-    <div class="flex items-center gap-3 sm:gap-4">
-        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-        <span class="font-label text-[9px] sm:text-[10px] tracking-widest text-on-surface-variant select-none">SYSTEM_STATUS: STABLE</span>
-    </div>
-</div>
 </div>
 </div>
 
@@ -273,7 +266,7 @@
 <div class="absolute right-3 top-14 sm:right-6 sm:top-24 md:right-8 md:top-32 hidden sm:flex flex-col gap-1 font-mono text-[7px] sm:text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight text-right z-[5] pointer-events-none mix-blend-screen opacity-40 sm:opacity-60 md:opacity-100 select-none">
 <span class="scramble-text" data-original="SHA-256 VERIFIED">SHA-256 VERIFIED</span>
 <span class="scramble-text" data-original="ENCRYPTION ACTIVE">ENCRYPTION ACTIVE</span>
-<span class="scramble-text" data-original="NODE_ID: SILENCE_01">NODE_ID: SILENCE_01</span>
+<span class="scramble-text" data-original="CLIENT-SIDE ENCRYPTION">CLIENT-SIDE ENCRYPTION</span>
 </div>
 </main>
 
@@ -285,11 +278,6 @@
 </div>
 <!-- Links/Metadata Section -->
 <div class="flex items-center gap-4 sm:gap-8 font-label text-[8px] sm:text-[10px] tracking-wider sm:tracking-widest uppercase select-none">
-<div class="hidden md:flex gap-6 items-center">
-<span class="text-slate-500 hover:text-slate-200 transition-colors">ENCRYPTION: AES-256</span>
-<span class="text-slate-500 hover:text-slate-200 transition-colors">LATENCY: <span id="dyn-latency">14</span>MS</span>
-<span class="text-slate-100 font-bold">NODE: SINGULARITY</span>
-</div>
 <div class="text-slate-400 opacity-60 text-right whitespace-nowrap">
     <span class="hidden sm:inline">ZERONODE // </span>DKYDIVYANSH.COM // 2025
 </div>
@@ -409,7 +397,7 @@
             { session: "0x" + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), hash: "45TH", blocks: [Math.floor(Math.random()*10), Math.floor(Math.random()*10)], active: true },
             { token: btoa(Math.random().toString()).substr(0,8), cx: { ip: "192.168.1." + Math.floor(Math.random()*255), pt: [443, 80][Math.floor(Math.random()*2)] }, mode: "stealth" },
             { sys: "ZERONODE_V" + Math.floor(Math.random()*10), keys: [{"rsa":"comp"},{"aes":"sec"}], ts: Date.now() },
-            { tgt: "alpha_node", drop: Math.floor(Math.random()*100), meta: {"reg":"us-east","lat": Math.floor(Math.random()*40) + "ms"} },
+            { cipher: "aes-256-gcm", drop: Math.floor(Math.random()*100), meta: {"reg":"us-east","lat": Math.floor(Math.random()*40) + "ms"} },
             { payload: "SECURE_HANDSHAKE", status: 200, sig: btoa(Math.random().toString()).substr(0,16) }
         ];
         return JSON.stringify(payloads[Math.floor(Math.random()*payloads.length)], null, 2);
@@ -467,14 +455,5 @@
             dynLngDir.innerText = Math.random() > 0.5 ? 'E' : 'W';
         }
     }, 3200);
-
-    // Live Latency Simulation
-    setInterval(() => {
-        const dynLatency = document.getElementById('dyn-latency');
-        if(dynLatency) {
-            const ping = Math.floor(Math.random() * (35 - 8 + 1) + 8);
-            dynLatency.innerText = ping;
-        }
-    }, 1000);
 </script>
 </body></html>

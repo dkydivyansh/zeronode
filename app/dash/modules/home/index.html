@@ -19,8 +19,8 @@
         <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
             Welcome, {{ user.first_name }}.
         </h1>
-        <p class="font-label text-xs tracking-[0.3em] text-on-surface-variant/60 uppercase">
-            SESSION ACTIVE // SCOPE: {{ 'ADMIN' if user.is_admin else user.scope | upper }}
+        <p class="font-label text-xs tracking-wider text-on-surface-variant/60">
+            Active Session &bull; {{ 'Administrator' if user.is_admin else 'Standard User' }}
         </p>
     </div>
 
@@ -78,7 +78,7 @@
         
         <!-- Identity Card -->
         <div class="border border-outline-variant/20 p-8 bg-surface-container/30 h-full">
-            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-6">AUTHENTICATED IDENTITY</p>
+            <p class="font-label text-[10px] tracking-widest text-on-surface-variant/50 mb-6">ACCOUNT PROFILE</p>
             <div class="flex items-start gap-6">
                 <!-- Avatar -->
                 {% if user.profile_photo %}
@@ -104,7 +104,7 @@
                         <p class="font-mono text-[11px] text-on-surface-variant/60 truncate" title="{{ user.user_id }}">{{ user.user_id }}</p>
                     </div>
                     <div class="min-w-0">
-                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">SESSION TTL</p>
+                        <p class="font-label text-[9px] tracking-widest text-on-surface-variant/40 mb-1">SESSION EXPIRES IN</p>
                         {% if session_remaining > 0 %}
                         <p class="font-mono text-[11px] text-on-surface-variant/60 truncate">{{ hours_left }}h {{ mins_left }}m remaining</p>
                         {% else %}
@@ -127,33 +127,33 @@
                     </div>
                     <div>
                         <h2 class="font-headline text-xl tracking-widest text-on-surface uppercase mb-1">ZERONODE DRIVE</h2>
-                        <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase">Encrypted Storage Vault</p>
+                        <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase">Encrypted Cloud Storage</p>
                     </div>
                 </div>
             </div>
             
             <div class="mt-8 flex justify-end">
                 <div class="font-label text-[10px] tracking-widest text-primary border border-primary/20 px-6 py-3 group-hover:bg-primary group-hover:text-black transition-all duration-500 uppercase font-bold">
-                    Open Vault
+                    Open Drive
                 </div>
             </div>
         </a>
     </div>
 
-    <!-- Security Operations -->
+    <!-- Account Deletion -->
     <div class="mb-12">
         <div class="border border-error/20 p-8 bg-error/5 relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-error/20 to-transparent"></div>
             <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
                 <div>
-                    <h2 class="font-headline text-xl tracking-widest text-error uppercase mb-2">Security Operations</h2>
-                    <p class="font-label text-[10px] tracking-widest text-on-surface-variant/40 uppercase max-w-xl">
-                        Authoritative Identity De-Provisioning Protocol. Executing this command will physically purge all database records, session handles, and encrypted file volumes associated with this identity. This action is irreversible.
+                    <h2 class="font-headline text-xl tracking-widest text-error uppercase mb-2">Delete Account & Stored Data</h2>
+                    <p class="font-label text-[10px] tracking-wider text-on-surface-variant/60 max-w-xl">
+                        Permanently delete your account and all associated encrypted files, keys, and active sessions. This action is permanent and cannot be reversed.
                     </p>
                 </div>
                 
-                <button onclick="ZNodeSecurityOperations.initiateSelfWipe()" class="border border-error/30 px-8 py-4 font-label text-[10px] tracking-[0.3em] font-bold text-error uppercase hover:bg-error hover:text-black transition-all duration-500 whitespace-nowrap">
-                    Wipe_Data
+                <button onclick="ZNodeSecurityOperations.initiateSelfWipe()" class="border border-error/30 px-8 py-4 font-label text-[10px] tracking-[0.2em] font-bold text-error uppercase hover:bg-error hover:text-black transition-all duration-500 whitespace-nowrap">
+                    Delete Account
                 </button>
             </div>
             <!-- Decorative Backing -->
@@ -167,20 +167,20 @@
     const ZNodeSecurityOperations = {
         async initiateSelfWipe() {
             const confirmed = await ZNodeDialog.confirm(
-                "IDENTITY_TERMINATION_PROTOCOL",
-                "You are about to authoritatively de-provision this identity and purge ALL encrypted volumes. This operation is permanent and irreversible. Proceed?"
+                "Delete Account",
+                "Are you sure you want to permanently delete your account and all stored files? This action is permanent and cannot be undone."
             );
             
             if (!confirmed) return;
             
             const expected = "I want to wipe my data";
             const input = await ZNodeDialog.prompt(
-                "FORENSIC_CONFIRMATION",
-                `Type "${expected}" to authorize identity erasure:`
+                "Confirm Deletion",
+                `Type "${expected}" to confirm account deletion:`
             );
             
             if (input !== expected) {
-                await ZNodeDialog.alert("PROTOCOL_ABORTED", "Forensic confirmation mismatch. Security gate remains locked.");
+                await ZNodeDialog.alert("Cancelled", "Confirmation text did not match. Account deletion cancelled.");
                 return;
             }
             
@@ -196,10 +196,10 @@
                 if (data.status === "IDENTITY_PURGED") {
                     window.location.href = data.redirect || '/auth/logout?auto=1';
                 } else {
-                    await ZNodeDialog.alert("PROTOCOL_FAILURE", data.error || "De-provisioning node reported an internal failure.");
+                    await ZNodeDialog.alert("Deletion Failed", data.error || "An error occurred while deleting your account.");
                 }
             } catch (e) {
-                await ZNodeDialog.alert("CRITICAL_NODE_ERROR", "Failed to reach the security erasure engine.");
+                await ZNodeDialog.alert("Error", "Failed to connect to the server.");
             }
         }
     };

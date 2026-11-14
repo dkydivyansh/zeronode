@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
-    <title>ZERONODE // DISCONNECTED</title>
+    <title>ZeroNode // Signed Out</title>
     <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
     <script>
         tailwind.config = {
@@ -51,7 +51,7 @@
     <div class="relative z-10 w-full max-w-xl bg-surface border border-outline-variant/30 shadow-[0_0_200px_rgba(0,0,0,0.8)] flex flex-col transition-all duration-700 overflow-hidden">
         <!-- Terminal Header -->
         <div class="border-b border-outline-variant/20 px-6 py-4 flex items-center justify-between bg-surface-container">
-            <h1 class="font-headline text-lg tracking-[0.2em] uppercase">SESSION DISCONNECTED</h1>
+            <h1 class="font-headline text-lg tracking-[0.2em] uppercase">Session Ended</h1>
             <div class="flex gap-1.5">
                 <div class="w-2 h-2 rounded-full bg-outline-variant/40"></div>
                 <div class="w-2 h-2 rounded-full bg-outline-variant/40"></div>
@@ -61,12 +61,12 @@
 
         <!-- Terminal Content -->
         <div id="terminal-screen" class="p-8 flex flex-col gap-2 font-mono text-[10px] tracking-widest uppercase text-on-surface-variant h-64 overflow-y-auto">
-            <div class="terminal-line">[ INFO ] INITIALIZING SECURITY WIPE PROTOCOL...</div>
+            <div class="terminal-line">[ INFO ] Clearing local session data and decrypted keys...</div>
         </div>
 
         <div class="p-6 border-t border-outline-variant/10 bg-surface-container-highest flex items-center justify-between">
             <div id="msg-complete" class="font-mono text-[9px] text-tertiary tracking-[0.2em] uppercase opacity-0 transition-opacity duration-300">
-                WIPE SUCCESSFUL // AUTO_REDIRECTING...
+                SESSION CLOSED // REDIRECTING...
             </div>
             <a href="{{ next_url or '/login' }}" id="continue-btn" class="bg-primary/10 border border-primary text-primary px-8 py-3 hover:bg-primary hover:text-black font-bold tracking-[0.3em] uppercase text-[10px] transition-all transform translate-x-4 opacity-0 pointer-events-none flex justify-center items-center">
                 CONTINUE
@@ -91,38 +91,38 @@
             // Instant Professional Scan
             log(`SYSTEM_UA: ${navigator.userAgent.slice(0, 60)}...`, 'sys');
             log(`SESSION_ORIGIN: ${window.location.origin}`, 'sys');
-            log('INITIALIZING TOTAL DISCONNECTION WIPE...', 'info');
+            log('Clearing local session data...', 'info');
 
             // 1. Session Storage Audit
             const sCount = sessionStorage.length;
-            log(`AUDIT: sessionStorage -> ${sCount} ENTRIES DETECTED.`, 'data');
+            log(`SessionStorage: ${sCount} entries detected.`, 'data');
             if (sCount > 0) {
                 Object.keys(sessionStorage).forEach(k => {
-                    log(`  > REVOKING: ${k} [PROTECTED]`, 'info');
+                    log(`  > Clearing: ${k}`, 'info');
                 });
                 sessionStorage.clear();
-                log('RESULT: sessionStorage ATOMIC_WIPE_COMPLETE.', 'ok');
+                log('Result: SessionStorage cleared.', 'ok');
             }
 
             // 2. Local Storage Audit
             const lCount = localStorage.length;
-            log(`AUDIT: localStorage -> ${lCount} ENTRIES DETECTED.`, 'data');
+            log(`LocalStorage: ${lCount} entries detected.`, 'data');
             if (lCount > 0) {
                 Object.keys(localStorage).forEach(k => {
-                    log(`  > UNLINKING_PERSISTENT: ${k}`, 'info');
+                    log(`  > Clearing: ${k}`, 'info');
                 });
                 localStorage.clear();
-                log('RESULT: localStorage ATOMIC_WIPE_COMPLETE.', 'ok');
+                log('Result: LocalStorage cleared.', 'ok');
             }
 
             // 3. Cryptographic Cache Purge (IndexedDB)
-            log(`OBJECT_STORE: Locating Cryptographic Volumes...`, 'info');
+            log(`IndexedDB: Clearing local caches...`, 'info');
             const deleteDb = (dbName) => new Promise((resolve) => {
                 const req = indexedDB.deleteDatabase(dbName);
-                req.onsuccess = () => resolve(`${dbName}: VOLUME_DELETED_SUCCESSFULLY.`);
-                req.onerror = () => resolve(`${dbName}: ACCESS_DENIED_ALREADY_CLEARED.`);
-                req.onblocked = () => resolve(`${dbName}: VOLUME_BLOCKED_FORCED_WIPE.`);
-                setTimeout(() => resolve(`${dbName}: PHY_WIPE_COMPLETE.`), 500); 
+                req.onsuccess = () => resolve(`${dbName}: Cache cleared successfully.`);
+                req.onerror = () => resolve(`${dbName}: Already cleared.`);
+                req.onblocked = () => resolve(`${dbName}: Blocked, force cleared.`);
+                setTimeout(() => resolve(`${dbName}: Cleared.`), 500); 
             });
             const dbMsg1 = await deleteDb('ZeroNodeVaultCache');
             log(dbMsg1, 'ok');
@@ -131,28 +131,26 @@
 
             // 4. Secure Cookie Revocation
             const cookies = document.cookie.split(";");
-            log(`AUDIT: Cookies -> ${cookies.length > 0 && cookies[0] !== "" ? cookies.length : 0} TOKENS DETECTED.`, 'data');
+            log(`Cookies: ${cookies.length > 0 && cookies[0] !== "" ? cookies.length : 0} tokens detected.`, 'data');
             cookies.forEach(function(c) { 
                 if (!c) return;
                 const name = c.split("=")[0].trim();
-                log(`  > INVALIDATING_TOKEN: ${name}`, 'info');
+                log(`  > Invalidating: ${name}`, 'info');
                 document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"; 
             });
-            log('RESULT: ALL_ACCESS_TOKENS_REVOKED.', 'ok');
+            log('Result: Session tokens invalidated.', 'ok');
 
             // Final Metadata Cleanup
-            log('ENVIRONMENT_RESET: SYNCING PERSISTENT_BUFFERS...', 'info');
             log('----------------------------------------------------');
-            log('SESSION_WIPE: COMPLETED SUCCESSFULLY.', 'ok');
-            log('STATUS: ENVIRONMENT_COLD_AND_SECURE.', 'ok');
+            log('Session closed successfully.', 'ok');
             
             // Dynamic Completion UI
             const msg = document.getElementById('msg-complete');
             if (msg) {
                 {% if auto_redirect %}
-                msg.innerText = "WIPE SUCCESSFUL // AUTO_REDIRECTING...";
+                msg.innerText = "SESSION CLOSED // REDIRECTING...";
                 {% else %}
-                msg.innerText = "WIPE SUCCESSFUL // SESSION PROTECTED";
+                msg.innerText = "SESSION CLOSED // CACHE CLEARED";
                 {% endif %}
                 msg.classList.add('opacity-100');
             }

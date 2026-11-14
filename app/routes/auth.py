@@ -115,7 +115,7 @@ def sso_callback():
     # ── Whitelist enforcement ────────────────────────────────────
     email = user_profile.get('email', '').lower()
     if not db_handler.is_whitelisted(email):
-        return redirect('/login?error=access_denied&msg=Your+node+is+not+whitelisted')
+        return redirect('/login?error=access_denied&msg=Your+account+is+not+whitelisted')
 
     # ── Upsert user + create session ─────────────────────────────
     user = db_handler.upsert_user(user_profile, access_token, scope)
