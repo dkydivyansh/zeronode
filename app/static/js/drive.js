@@ -1,4 +1,4 @@
-const FILE_API = window.location.pathname.startsWith('/app/graph') ? '/app/graph/api/file' : '/app/api/file';
+const FILE_API = '/app/api/file';
 
 // --- 1. Global State & Task Registry ---
 let activeTransfers = 0;
@@ -2398,8 +2398,6 @@ async function moveItem(id, type, name) {
         folderId ? `/app/api/drive/list/${folderId}` : "/app/api/drive/list",
       );
       const data = await res.json();
-
-      const FILE_API = window.location.pathname.startsWith('/app/graph') ? '/app/graph/api/file' : '/app/api/file';
 
       // We only care about folders that aren't the one we are currently moving
       const folders = data.folders.filter((f) => f.id !== id);

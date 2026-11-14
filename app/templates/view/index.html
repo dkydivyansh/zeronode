@@ -2,7 +2,7 @@
 
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=5.0" name="viewport"/>
 <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
 <title>ZERONODE // BY DKYDIVYANSH.COM</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
@@ -81,14 +81,38 @@
         body {
             background-color: #000000;
             color: #E2E8F0;
-            overflow: hidden;
-            cursor: none;
+            overflow-x: hidden;
+            min-height: 100vh;
+            min-height: 100dvh;
         }
-        * { cursor: none !important; }
+
+        /* Desktop-only: Zero scrollbar lock on large screens with sufficient height */
+        @media (min-width: 768px) and (min-height: 700px) {
+            body {
+                overflow: hidden;
+            }
+        }
+
+        /* Custom Cursor only on desktop with hover and fine pointer */
+        @media (hover: hover) and (pointer: fine) {
+            body, * {
+                cursor: none !important;
+            }
+        }
+
+        /* Hide custom cursor on touch/mobile devices */
+        @media (hover: none) or (pointer: coarse) {
+            #custom-cursor, #custom-cursor-dot {
+                display: none !important;
+            }
+            body, * {
+                cursor: auto !important;
+            }
+        }
 
         @keyframes customFloat {
             0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-30px); }
+            50% { transform: translateY(-20px); }
         }
         @keyframes customSpin {
             100% { transform: rotate(360deg); }
@@ -97,8 +121,8 @@
             100% { transform: rotate(-360deg); }
         }
         @keyframes customPulse {
-            0%, 100% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 20px rgba(180, 198, 239, 0.4)); }
-            50% { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 50px rgba(180, 198, 239, 0.8)); }
+            0%, 100% { opacity: 0.8; transform: scale(1); filter: drop-shadow(0 0 15px rgba(180, 198, 239, 0.4)); }
+            50% { opacity: 1; transform: scale(1.08); filter: drop-shadow(0 0 35px rgba(180, 198, 239, 0.8)); }
         }
 
         .anim-float { animation: customFloat 6s ease-in-out infinite; }
@@ -106,6 +130,7 @@
         .anim-spin-2 { animation: customSpinRev 30s linear infinite; }
         .anim-spin-3 { animation: customSpin 15s linear infinite; }
         .anim-pulse { animation: customPulse 5s ease-in-out infinite; }
+        
         @keyframes dataStream {
             0% { transform: translateY(-100%); opacity: 0; }
             50% { opacity: 1; }
@@ -127,19 +152,26 @@
         .anim-glow-text { animation: glowText 4s ease-in-out infinite; }
 
         .wireframe-glow {
-            box-shadow: 0 0 40px rgba(180, 198, 239, 0.15);
+            box-shadow: 0 0 30px rgba(180, 198, 239, 0.15);
         }
         .scanline {
             background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
             background-size: 100% 4px;
         }
-    </style>
+
+        /* Prevent mobile tap highlight */
+        .touch-manipulation {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+</style>
 </head>
 <body class="font-body selection:bg-tertiary-fixed selection:text-on-tertiary-fixed">
 <!-- Background Elements -->
 <div class="fixed inset-0 z-0 pointer-events-none opacity-20 scanline"></div>
+
 <!-- Static Encrypted JSON Blocks -->
-<div class="fixed top-10 left-4 md:top-20 md:left-20 font-mono text-[8px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+<div class="fixed top-4 left-3 sm:top-8 sm:left-6 md:top-20 md:left-20 font-mono text-[7px] sm:text-[9px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre select-none opacity-60 sm:opacity-100">
 <span class="scramble-text" data-original='{
   "sys_id": "vx-901",
   "auth_status": "pending",
@@ -150,7 +182,8 @@
   "encryption": "AES-GCM"
 }</span>
 </div>
-<div class="fixed bottom-32 right-4 md:bottom-40 md:right-32 font-mono text-[8px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+
+<div class="fixed bottom-14 right-3 sm:bottom-28 sm:right-6 md:bottom-40 md:right-32 font-mono text-[7px] sm:text-[9px] md:text-sm text-on-surface-variant/20 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre select-none opacity-60 sm:opacity-100">
 <span class="scramble-text" data-original='{
   "payload": "0x00A1F9",
   "handshake": true,
@@ -161,7 +194,8 @@
   "latency": "14ms"
 }</span>
 </div>
-<div class="fixed top-1/2 left-1/4 hidden md:block font-mono text-sm text-on-surface-variant/10 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre">
+
+<div class="fixed top-1/2 left-1/4 hidden lg:block font-mono text-sm text-on-surface-variant/10 leading-tight z-0 pointer-events-none mix-blend-screen whitespace-pre select-none">
 <span class="scramble-text" data-original='{
   "NODE": "SINGULARITY",
   "HASH": "f38a91c122e05d78"
@@ -170,145 +204,176 @@
   "HASH": "f38a91c122e05d78"
 }</span>
 </div>
+
 <!-- Hero Canvas -->
-<main class="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden">
+<main class="relative z-10 min-h-screen min-h-[100dvh] flex flex-col items-center justify-center px-4 pt-10 pb-20 sm:py-16 md:py-0 overflow-hidden box-border">
 <!-- Subtle Ambient Data Streaks -->
-<div class="absolute left-4 md:left-10 top-1/4 h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant to-transparent overflow-hidden">
+<div class="absolute left-2 sm:left-4 md:left-10 top-1/4 h-48 sm:h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant/40 md:via-outline-variant to-transparent overflow-hidden pointer-events-none">
     <div class="w-full h-1/3 bg-gradient-to-b from-transparent via-primary/50 to-transparent anim-data-stream"></div>
 </div>
-<div class="absolute right-4 md:right-10 bottom-1/4 h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant to-transparent overflow-hidden">
+<div class="absolute right-2 sm:right-4 md:right-10 bottom-1/4 h-48 sm:h-64 w-[1px] bg-gradient-to-b from-transparent via-outline-variant/40 md:via-outline-variant to-transparent overflow-hidden pointer-events-none">
     <div class="w-full h-1/3 bg-gradient-to-b from-transparent via-primary/50 to-transparent anim-data-stream-delay"></div>
 </div>
+
 <!-- Central Object -->
-<div id="parallax-wrapper" class="relative w-64 h-64 md:w-96 md:h-96 flex items-center justify-center mb-16 transition-transform duration-200 ease-out">
+<div id="parallax-wrapper" class="relative w-44 h-44 sm:w-60 sm:h-60 md:w-80 md:h-80 lg:w-96 lg:h-96 flex items-center justify-center mb-6 sm:mb-10 md:mb-16 transition-transform duration-200 ease-out select-none">
 <div class="relative w-full h-full flex items-center justify-center anim-float">
 <!-- Wireframe Core (Represented by CSS Shapes for Precision) -->
 <div class="absolute inset-0 border border-on-surface-variant/20 rotate-45 scale-75 wireframe-glow anim-spin-1"></div>
 <div class="absolute inset-0 border border-on-surface-variant/30 -rotate-12 scale-90 anim-spin-2"></div>
 <div class="absolute inset-0 border border-tertiary/20 rotate-180 anim-spin-3"></div>
 <!-- Floating Inner Prism -->
-<div class="relative w-32 h-32 md:w-48 md:h-48 border border-primary/40 flex items-center justify-center anim-pulse anim-spin-1">
-<div class="absolute inset-0 bg-tertiary/10 blur-3xl rounded-full"></div>
-<div class="w-2 h-2 bg-primary rounded-full animate-ping"></div>
+<div class="relative w-20 h-20 sm:w-28 sm:h-28 md:w-44 md:h-44 border border-primary/40 flex items-center justify-center anim-pulse anim-spin-1">
+<div class="absolute inset-0 bg-tertiary/10 blur-xl sm:blur-2xl md:blur-3xl rounded-full"></div>
+<div class="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-primary rounded-full animate-ping"></div>
 </div>
 </div>
 <!-- Decorative Coordinates -->
-<div class="absolute -top-12 left-0 font-label text-[10px] tracking-[0.3em] text-secondary anim-flicker">
-                LAT: <span id="dyn-lat">40.7128</span>° <span id="dyn-lat-dir">N</span>
-            </div>
-<div class="absolute -bottom-12 right-0 font-label text-[10px] tracking-[0.3em] text-secondary anim-flicker" style="animation-delay: 2s;">
-                LNG: <span id="dyn-lng">74.0060</span>° <span id="dyn-lng-dir">W</span>
-            </div>
+<div class="absolute -top-7 sm:-top-9 md:-top-12 left-0 font-label text-[8px] sm:text-[9px] md:text-[10px] tracking-[0.2em] sm:tracking-[0.3em] text-secondary anim-flicker">
+    LAT: <span id="dyn-lat">40.7128</span>° <span id="dyn-lat-dir">N</span>
 </div>
+<div class="absolute -bottom-7 sm:-bottom-9 md:-bottom-12 right-0 font-label text-[8px] sm:text-[9px] md:text-[10px] tracking-[0.2em] sm:tracking-[0.3em] text-secondary anim-flicker" style="animation-delay: 2s;">
+    LNG: <span id="dyn-lng">74.0060</span>° <span id="dyn-lng-dir">W</span>
+</div>
+</div>
+
 <!-- Typography Stack -->
-<div class="text-center z-20">
-<h1 class="font-headline text-5xl md:text-8xl font-bold tracking-[0.25em] text-on-surface mb-4">
-                ZERONODE
-            </h1>
-<p class="font-label text-xs md:text-sm tracking-[0.5em] text-secondary uppercase mb-12">
-                THE SINGULARITY OF DATA
-            </p>
-<div class="flex flex-col items-center gap-8">
+<div class="text-center z-20 w-full max-w-4xl px-2">
+<h1 class="font-headline text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-[0.16em] sm:tracking-[0.2em] md:tracking-[0.25em] pl-[0.16em] sm:pl-[0.2em] md:pl-[0.25em] text-on-surface mb-2 sm:mb-4 select-none leading-none">
+    ZERONODE
+</h1>
+<p class="font-label text-[9px] sm:text-xs md:text-sm tracking-[0.25em] sm:tracking-[0.38em] md:tracking-[0.5em] pl-[0.25em] sm:pl-[0.38em] md:pl-[0.5em] text-secondary uppercase mb-6 sm:mb-8 md:mb-12 select-none leading-relaxed">
+    THE SINGULARITY OF DATA
+</p>
+<div class="flex flex-col items-center gap-5 sm:gap-8">
 <!-- Action -->
-<a href="/login" class="group relative px-12 py-4 border border-outline hover:border-primary transition-all duration-500 interactive-el">
-<span class="relative z-10 font-label text-xs tracking-[0.4em] text-primary group-hover:text-on-background">INITIALIZE</span>
-<div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
+<a href="{% if user %}/app/home{% else %}/login{% endif %}" class="group relative px-8 py-3.5 sm:px-12 sm:py-4 border border-outline hover:border-primary active:border-primary active:bg-primary/10 transition-all duration-300 sm:duration-500 interactive-el touch-manipulation">
+    <span class="relative z-10 font-label text-[11px] sm:text-xs tracking-[0.3em] sm:tracking-[0.4em] pl-[0.3em] sm:pl-[0.4em] text-primary group-hover:text-on-background select-none">
+        {% if user %}ENTER SYSTEM{% else %}INITIALIZE{% endif %}
+    </span>
+    <div class="absolute inset-0 w-0 group-hover:w-full bg-primary/5 transition-all duration-500"></div>
 </a>
 <!-- Technical Details -->
 <div class="flex flex-col items-center gap-2 opacity-60">
-<div class="flex items-center gap-4">
-<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-<span class="font-label text-[10px] tracking-widest text-on-surface-variant">SYSTEM_STATUS: STABLE</span>
+    <div class="flex items-center gap-3 sm:gap-4">
+        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+        <span class="font-label text-[9px] sm:text-[10px] tracking-widest text-on-surface-variant select-none">SYSTEM_STATUS: STABLE</span>
+    </div>
 </div>
 </div>
 </div>
-</div>
-<!-- SHA-256 Floating Streams -->
-<div class="absolute left-4 bottom-24 md:left-8 md:bottom-32 flex flex-col gap-1 font-mono text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight z-[5] pointer-events-none mix-blend-screen opacity-50 md:opacity-100">
+
+<!-- SHA-256 Floating Streams (Desktop/Tablet) -->
+<div class="absolute left-3 bottom-14 sm:left-6 sm:bottom-24 md:left-8 md:bottom-32 hidden sm:flex flex-col gap-1 font-mono text-[7px] sm:text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight z-[5] pointer-events-none mix-blend-screen opacity-40 sm:opacity-60 md:opacity-100 select-none">
 <span class="scramble-text" data-original="F38A 91C1 22E0 5D78">F38A 91C1 22E0 5D78</span>
 <span class="scramble-text" data-original="AA90 221B CF74 8821">AA90 221B CF74 8821</span>
 <span class="scramble-text" data-original="B293 8EED 10CC 9192">B293 8EED 10CC 9192</span>
 <span class="scramble-text" data-original="44FA 1123 DDE9 2001">44FA 1123 DDE9 2001</span>
 </div>
-<div class="absolute right-4 top-24 md:right-8 md:top-32 flex flex-col gap-1 font-mono text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight text-right z-[5] pointer-events-none mix-blend-screen opacity-50 md:opacity-100">
+<div class="absolute right-3 top-14 sm:right-6 sm:top-24 md:right-8 md:top-32 hidden sm:flex flex-col gap-1 font-mono text-[7px] sm:text-[8px] md:text-[9px] text-on-surface-variant/30 leading-tight text-right z-[5] pointer-events-none mix-blend-screen opacity-40 sm:opacity-60 md:opacity-100 select-none">
 <span class="scramble-text" data-original="SHA-256 VERIFIED">SHA-256 VERIFIED</span>
 <span class="scramble-text" data-original="ENCRYPTION ACTIVE">ENCRYPTION ACTIVE</span>
 <span class="scramble-text" data-original="NODE_ID: SILENCE_01">NODE_ID: SILENCE_01</span>
 </div>
 </main>
-<!-- Footer: Mapped from Shared Components JSON -->
-<footer class="fixed bottom-0 w-full flex justify-between items-center px-8 py-6 w-full z-50 bg-transparent interactive-el">
+
+<!-- Footer -->
+<footer class="fixed bottom-0 left-0 w-full flex justify-between items-center px-4 py-3 sm:px-8 sm:py-4 md:py-6 z-50 bg-gradient-to-t from-black/90 via-black/40 to-transparent md:bg-transparent backdrop-blur-[2px] md:backdrop-blur-none interactive-el pointer-events-auto">
 <!-- Logo/Brand Section -->
-<div class="font-['Noto_Serif'] text-lg text-slate-100">
-            ZERONODE
-        </div>
+<div class="font-headline text-sm sm:text-base md:text-lg text-slate-100 tracking-wider select-none">
+    ZERONODE
+</div>
 <!-- Links/Metadata Section -->
-<div class="flex items-center gap-8 font-['Space_Grotesk'] text-[10px] tracking-widest uppercase">
+<div class="flex items-center gap-4 sm:gap-8 font-label text-[8px] sm:text-[10px] tracking-wider sm:tracking-widest uppercase select-none">
 <div class="hidden md:flex gap-6 items-center">
 <span class="text-slate-500 hover:text-slate-200 transition-colors">ENCRYPTION: AES-256</span>
 <span class="text-slate-500 hover:text-slate-200 transition-colors">LATENCY: <span id="dyn-latency">14</span>MS</span>
 <span class="text-slate-100 font-bold">NODE: SINGULARITY</span>
 </div>
-<div class="text-slate-100 dark:text-slate-200 opacity-50">
-                ZERONODE // DKYDIVYANSH.COM // 2025
-            </div>
+<div class="text-slate-400 opacity-60 text-right whitespace-nowrap">
+    <span class="hidden sm:inline">ZERONODE // </span>DKYDIVYANSH.COM // 2025
+</div>
 </div>
 </footer>
-<!-- Side Overlays for "Vast Expanse" feel -->
-<div class="fixed top-0 bottom-0 left-0 w-24 bg-gradient-to-r from-background to-transparent z-0 pointer-events-none"></div>
-<div class="fixed top-0 bottom-0 right-0 w-24 bg-gradient-to-l from-background to-transparent z-0 pointer-events-none"></div>
 
-<!-- Custom Cursor & Logic -->
-<div id="custom-cursor" class="pointer-events-none fixed top-0 left-0 w-12 h-12 border border-primary/50 mix-blend-screen rounded-full z-[9999] transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-300 ease-out flex items-center justify-center will-change-transform">
+<!-- Side Overlays for "Vast Expanse" feel -->
+<div class="fixed top-0 bottom-0 left-0 w-8 sm:w-16 md:w-24 bg-gradient-to-r from-background to-transparent z-0 pointer-events-none"></div>
+<div class="fixed top-0 bottom-0 right-0 w-8 sm:w-16 md:w-24 bg-gradient-to-l from-background to-transparent z-0 pointer-events-none"></div>
+
+<!-- Custom Cursor & Logic (Only rendered for pointer/mouse devices) -->
+<div id="custom-cursor" class="pointer-events-none fixed top-0 left-0 w-12 h-12 border border-primary/50 mix-blend-screen rounded-full z-[9999] transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-300 ease-out hidden md:flex items-center justify-center will-change-transform opacity-0">
     <div class="w-2 h-2 bg-tertiary/50 rounded-full animate-ping"></div>
 </div>
-<div id="custom-cursor-dot" class="pointer-events-none fixed top-0 left-0 w-1.5 h-1.5 bg-primary rounded-full z-[10000] transform -translate-x-1/2 -translate-y-1/2 will-change-transform"></div>
+<div id="custom-cursor-dot" class="pointer-events-none fixed top-0 left-0 w-1.5 h-1.5 bg-primary rounded-full z-[10000] transform -translate-x-1/2 -translate-y-1/2 will-change-transform hidden md:block opacity-0"></div>
 
 <script>
+    const isTouchOnly = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     const cursor = document.getElementById('custom-cursor');
     const cursorDot = document.getElementById('custom-cursor-dot');
-    let mouseX = window.innerWidth / 2;
-    let mouseY = window.innerHeight / 2;
-    let cursorX = window.innerWidth / 2;
-    let cursorY = window.innerHeight / 2;
     
-    document.addEventListener('mousemove', (e) => {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-        cursorDot.style.left = `${mouseX}px`;
-        cursorDot.style.top = `${mouseY}px`;
-    });
-    
-    function animateCursor() {
-        cursorX += (mouseX - cursorX) * 0.12;
-        cursorY += (mouseY - cursorY) * 0.12;
-        cursor.style.left = `${cursorX}px`;
-        cursor.style.top = `${cursorY}px`;
-        requestAnimationFrame(animateCursor);
-    }
-    animateCursor();
-
-    const interactives = document.querySelectorAll('button, a, .interactive-el');
-    interactives.forEach(el => {
-        el.addEventListener('mouseenter', () => {
-            cursor.classList.add('scale-[2.5]', 'bg-primary/20', 'border-primary');
-            cursor.classList.remove('border-primary/50');
+    // Custom cursor only active on desktop/mouse
+    if (!isTouchOnly && cursor && cursorDot) {
+        let mouseX = -100;
+        let mouseY = -100;
+        let cursorX = -100;
+        let cursorY = -100;
+        let isCursorActive = false;
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isCursorActive) {
+                isCursorActive = true;
+                cursor.style.opacity = '1';
+                cursorDot.style.opacity = '1';
+                cursorX = e.clientX;
+                cursorY = e.clientY;
+            }
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursorDot.style.left = `${mouseX}px`;
+            cursorDot.style.top = `${mouseY}px`;
         });
-        el.addEventListener('mouseleave', () => {
-            cursor.classList.remove('scale-[2.5]', 'bg-primary/20', 'border-primary');
-            cursor.classList.add('border-primary/50');
-        });
-    });
-    
-    // Parallax on mouse move for the central object
-    const parallaxWrapper = document.getElementById('parallax-wrapper');
-    document.addEventListener('mousemove', (e) => {
-        const x = (e.clientX / window.innerWidth - 0.5) * 30;
-        const y = (e.clientY / window.innerHeight - 0.5) * 30;
-        if(parallaxWrapper) {
-            parallaxWrapper.style.transform = `translate(${x}px, ${y}px)`;
+        
+        function animateCursor() {
+            if (isCursorActive) {
+                cursorX += (mouseX - cursorX) * 0.14;
+                cursorY += (mouseY - cursorY) * 0.14;
+                cursor.style.left = `${cursorX}px`;
+                cursor.style.top = `${cursorY}px`;
+            }
+            requestAnimationFrame(animateCursor);
         }
-    });
+        animateCursor();
+
+        const interactives = document.querySelectorAll('button, a, .interactive-el');
+        interactives.forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursor.classList.add('scale-[2.2]', 'bg-primary/20', 'border-primary');
+                cursor.classList.remove('border-primary/50');
+            });
+            el.addEventListener('mouseleave', () => {
+                cursor.classList.remove('scale-[2.2]', 'bg-primary/20', 'border-primary');
+                cursor.classList.add('border-primary/50');
+            });
+        });
+    }
+    
+    // Parallax on mouse move for the central object (Desktop), Gyro tilt on mobile
+    const parallaxWrapper = document.getElementById('parallax-wrapper');
+    if (!isTouchOnly && parallaxWrapper) {
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth - 0.5) * 30;
+            const y = (e.clientY / window.innerHeight - 0.5) * 30;
+            parallaxWrapper.style.transform = `translate(${x}px, ${y}px)`;
+        });
+    } else if (parallaxWrapper && window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (e) => {
+            if (e.gamma !== null && e.beta !== null) {
+                const x = Math.min(Math.max(e.gamma / 3, -15), 15);
+                const y = Math.min(Math.max((e.beta - 45) / 3, -15), 15);
+                parallaxWrapper.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+            }
+        }, { passive: true });
+    }
 
     // Scramble text effect
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
@@ -411,7 +476,5 @@
             dynLatency.innerText = ping;
         }
     }, 1000);
-
-    
 </script>
 </body></html>

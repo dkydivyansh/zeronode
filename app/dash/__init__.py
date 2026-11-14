@@ -43,13 +43,7 @@ def stream_file(file_uuid):
     try:
         file_package = manager.get_file(file_uuid)
     except FileNotFoundError:
-        # Fallback to Graph files
-        from app.dash.modules.graph.graph_data import get_graph_manager
-        graph_manager = get_graph_manager()
-        try:
-            file_package = graph_manager.get_file(file_uuid)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 404
+        return jsonify({"error": "File not found"}), 404
 
     try:
         file_path = file_package['file_path']
@@ -179,11 +173,6 @@ def get_file_meta(file_uuid):
         file_package = manager.get_file(file_uuid)
         return jsonify(file_package['metadata']), 200
     except FileNotFoundError:
-        from app.dash.modules.graph.graph_data import get_graph_manager
-        graph_manager = get_graph_manager()
-        file_meta = graph_manager.get_file_meta(file_uuid)
-        if file_meta:
-            return jsonify(file_meta), 200
         return jsonify({"error": "File not found"}), 404
 
 @dashboard_bp.route('/api/file/<file_uuid>/meta', methods=['PATCH'])

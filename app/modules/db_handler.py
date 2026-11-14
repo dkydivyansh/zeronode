@@ -4,10 +4,12 @@ import secrets
 import time
 import shutil
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'server_data.db')
+DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data'))
+DB_PATH = os.path.join(DATA_DIR, 'server_data.db')
 
 def _get_conn():
     """Get a new database connection with row_factory for dict-like access."""
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
