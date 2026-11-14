@@ -34,37 +34,6 @@ To the server, everything you upload is just an opaque blob of random binary chu
 
 ---
 
-## How It Works (In Plain English)
-
-```
-[ Your Browser (Client) ]                                       [ ZeroNode Server ]
-           │                                                            │
-  Master Password ──> PBKDF2 (250,000 rounds) ──> Master Key            │
-           │                                                            │
-  P-256 ECDH Keypair ──> Encrypt Private Key with Master Key ─────────> │ Stores wrapped bundle blindly
-           │                                                            │
-  Plaintext File ──> Split into 5 MB chunks                             │
-           │                                                            │
-  Generate unique 256-bit AES-GCM Key (DEK)                             │
-           │                                                            │
-  Encrypt chunks in parallel (Deterministic IVs)                        │
-           │                                                            │
-           ├──────────── 1. POST /app/api/file/init ───────────────────>│ Reserves UUID & touched 0-byte file
-           │                                                            │
-           ├──────────── 2. POST /app/api/file/<uuid>/chunk ───────────>│ Writes raw ciphertext chunks
-           │               (4 concurrent streams with offset seeks)     │ directly to disk (<uuid>.bin)
-           │                                                            │
-           └──────────── 3. POST /app/api/file/<uuid>/finalize ────────>│ Validates file size & commits metadata
-```
-
-1. **Vault Unlock:** When you log in, your browser pulls your wrapped private key bundle. You type your master password, your browser derives the PBKDF2 key locally, unwraps the private key, and stores it in a secure, non-extractable IndexedDB session store (`ZNodeSession`).
-2. **Uploading:** When you drag in a file, your browser generates a random 256-bit AES-GCM key just for that file. It breaks the file into 5 MB chunks, encrypts each chunk using a unique counter-derived IV, and streams them in parallel to the server.
-3. **Downloading:** For small files, the browser decrypts chunks straight into memory. For huge files (100 MB to 10 GB+), it fires parallel HTTP `Range` requests, streams the slices into OPFS, decrypts on the fly, and outputs the finished file with zero lag.
-
-For an in-depth breakdown of the cryptographic primitives, check out [E2EE_FLOW.md](E2EE_FLOW.md) and [PROJECT.md](PROJECT.md).
-
----
-
 ## Quick Start
 
 ### Option A: Running with Docker (Recommended)
@@ -136,35 +105,6 @@ If you prefer running directly on your host machine:
 
 ---
 
-## Project Structure
-
-```
-zeronode/
-├── run.py                 # Server entrypoint (Waitress WSGI / Flask Dev)
-├── requirements.txt       # Minimal dependencies (Flask, waitress, etc.)
-├── Dockerfile             # Production container definition
-├── docker-compose.yml     # Persistent volume setup for data/
-├── E2EE_FLOW.md           # Deep dive into the cryptographic protocol
-├── PROJECT.md             # Complete system architecture and developer manual
-│
-├── data/                  # Storage directory (gitignored)
-│   ├── server_data.db     # Global SQLite database (users, whitelist, sessions)
-│   └── <user_id>/         # Isolated user vault folder
-│       ├── <user_id>.db   # Per-user metadata & folder trees
-│       └── <uuid>.bin     # Raw encrypted file blobs
-│
-└── app/
-    ├── modules/           # Pure backend engines (db_handler.py, user_data.py)
-    ├── routes/            # Public routes (client landing, SSO auth handshake)
-    ├── dash/              # Authenticated dashboard framework (/app/*)
-    │   ├── loader.py      # Dynamic module registrar
-    │   ├── shell.html     # Base dashboard layout & unlock modal
-    │   └── modules/       # Built-in modules: home, drive, admin
-    └── static/            # Self-hosted assets (CSS, fonts, JS crypto engines)
-```
-
----
-
 ## Dashboard Modules
 
 | Module | Route | What it does |
@@ -187,16 +127,7 @@ ZeroNode doesn't just encrypt your files—it hardens the entire web environment
   - **Self-Wipe:** Users can authoritatively purge their personal identity, encrypted blobs, and database records at any time.
   - **Server Liquidation:** Admins can trigger a nuclear wipe protocol with Windows/Linux file-lock override routines that permanently removes `.env`, database volumes, and shuts down the process.
 
----
-
-## Tech Stack
-
-- **Backend:** Python 3.11+, Flask (Modular Blueprints, zero ORM bloat)
-- **Database:** SQLite with WAL mode (`PRAGMA journal_mode=WAL`)
-- **Crypto:** Browser WebCrypto API (`AES-256-GCM`, `ECDH P-256`, `PBKDF2-SHA256`)
-- **Storage:** Origin Private File System (OPFS) + IndexedDB
-- **Frontend:** Vanilla JS (ES6+), self-hosted Tailwind CSS, local WOFF2 fonts
-- **WSGI:** Waitress / Gunicorn
+For technical deep-dives into the architecture and cryptographic specifications, refer to [PROJECT.md](PROJECT.md) and [E2EE_FLOW.md](E2EE_FLOW.md).
 
 ---
 
@@ -216,3 +147,8 @@ Got ideas to make ZeroNode even more airtight, faster, or easier to run? Pull re
 
 Built with ❤️ for privacy and security. Distributed under the MIT License. See `LICENSE` for more information.
 
+---
+
+## Keywords
+
+`zero-knowledge` · `end-to-end-encryption` · `e2ee` · `privacy` · `encrypted-storage` · `vault` · `webcrypto-api` · `aes-256-gcm` · `ecdh-p256` · `pbkdf2` · `bip39` · `opfs` · `origin-private-file-system` · `self-hosted` · `air-gapped` · `secure-cloud` · `flask` · `sqlite-wal` · `zero-trust`
