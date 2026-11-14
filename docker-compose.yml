@@ -3,11 +3,14 @@ version: '3.8'
 services:
   zeronode:
     build: .
-    container_name: zeronode_app
+    container_name: zeronode
     ports:
       - "8862:8862"
     volumes:
-      - /srv/data/zeronode:/app/data
+      - /home/ano/serevrdat/zeronode:/app/data
+    env_file:
+      - .env
     environment:
       - FLASK_ENV=production
+      - DATA_DIR=/app/data
     restart: unless-stopped

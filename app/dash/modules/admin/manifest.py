@@ -93,7 +93,7 @@ class Manifest(ModuleManifest):
                 return jsonify({"error": "Confirmation text does not match. System reset aborted."}), 400
             
             # Reset the entire server installation
-            success = db_handler.nuclear_wipe_server()
+            success = db_handler.reset_server()
             return jsonify({"status": "SYSTEM_RESET" if success else "RESET_FAILED"}), 200 if success else 500
 
         # ─── BACKUP MANAGEMENT API CLUSTER ─────────────────────────────

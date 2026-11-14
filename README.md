@@ -28,9 +28,9 @@ To the server, everything you upload is just an opaque blob of random binary chu
 - 📝 **In-Vault Markdown Notes & Document Viewer**  
   Create and edit encrypted Markdown notes with live previewing, and view encrypted PDFs and media files directly in your browser without ever decrypting them to unencrypted temporary files on disk.
 - 🌐 **100% Air-Gapped & Zero CDNs**  
-  Fonts (Inter, Space Grotesk, Noto Serif), Tailwind CSS runtime, and vendor libraries are completely self-hosted inside the repository. Zero external telemetry, zero tracking scripts, zero CDN dependencies.
+  Fonts (Inter, Space Grotesk, Noto Serif), Tailwind CSS runtime, and vendor libraries are completely self-hosted inside the repository. Zero external analytics, zero tracking scripts, zero CDN dependencies.
 - 🛂 **SSO & Whitelist Access Control**  
-  OAuth 2.0 authentication combined with strict database-backed email whitelisting, session lifetime enforcement, administrative rank controls, and nuclear liquidation protocols.
+  OAuth 2.0 authentication combined with strict database-backed email whitelisting, session lifetime enforcement, administrative role management, and permanent data deletion controls.
 
 ---
 
@@ -109,7 +109,7 @@ If you prefer running directly on your host machine:
 
 | Module | Route | What it does |
 |---|---|---|
-| **Home** | `/app/home` | Your command center. Displays authenticated identity details, live vault storage quota meters, session countdown, and quick links. |
+| **Home** | `/app/home` | Central dashboard overview. Displays authenticated account details, live storage usage meters, session countdown, and quick links. |
 | **Drive** | `/app/drive` | Full-fledged encrypted file explorer. Supports drag-and-drop chunked uploads, folder creation, search, markdown editing, and media/PDF previews. |
 | **Admin** | `/app/admin` | Privileged operations console (restricted to users in the `admins` ledger). View host disk health, inspect user storage footprints, manage whitelisted emails, promote admins, or trigger node wipes. |
 
@@ -122,10 +122,10 @@ ZeroNode doesn't just encrypt your files—it hardens the entire web environment
 - **Strict Content Security Policy (CSP):** Blocks inline script tampering and external unauthorized endpoints.
 - **Cross-Origin Opener Policy (COOP) & Cross-Origin Resource Policy (CORP):** Set to `same-origin` to isolate windows and prevent cross-origin memory snooping.
 - **Non-Extractable Keys:** Client session keys are loaded into WebCrypto as non-extractable keys (`extractable = false`), protecting them against rogue DOM scripts.
-- **Anti-DoS Stale Cleanups:** Incomplete uploads (`file_size = -1`) older than 5 minutes are automatically purged from disk to prevent storage exhaustion attacks.
-- **Nuclear Liquidation Protocols:**
-  - **Self-Wipe:** Users can authoritatively purge their personal identity, encrypted blobs, and database records at any time.
-  - **Server Liquidation:** Admins can trigger a nuclear wipe protocol with Windows/Linux file-lock override routines that permanently removes `.env`, database volumes, and shuts down the process.
+- **Anti-DoS Stale Cleanups:** Incomplete uploads (`file_size = -1`) older than 5 minutes are automatically cleaned up from disk to prevent storage exhaustion attacks.
+- **Permanent Data Deletion Controls:**
+  - **Account Deletion:** Users can permanently delete their personal account, encrypted files, and database records at any time.
+  - **Server Reset:** Administrators can trigger a complete system reset with file-lock override routines that permanently removes `.env`, database volumes, and restores the installation to an uninitialized state.
 
 For technical deep-dives into the architecture and cryptographic specifications, refer to [PROJECT.md](PROJECT.md) and [E2EE_FLOW.md](E2EE_FLOW.md).
 

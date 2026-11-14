@@ -160,7 +160,7 @@ Browser Client                                                    ZeroNode Serve
   }
   ```
 - **Backend Operation:**
-  1. Triggers `_cleanup_stale_uploads()`: Any upload stuck with `file_size = -1` older than 5 minutes is purged.
+  1. Triggers `_cleanup_stale_uploads()`: Any upload stuck with `file_size = -1` older than 5 minutes is cleaned up.
   2. Generates a new file UUID (`file_uuid`).
   3. Touches an empty `<file_uuid>.bin` on disk.
   4. Inserts a row in the user's `files` table with `file_size = -1` (staged/incomplete).
@@ -185,7 +185,7 @@ Browser Client                                                    ZeroNode Serve
   1. Inspects the physical file size on disk via `os.path.getsize(file_path)`.
   2. Rejects files with 0 bytes (unless the file is an empty Markdown note `.md`).
   3. Updates `files` table: sets `file_size = actual_size` and updates `last_modified`.
-  4. Invalidates the user's storage telemetry cache (`invalidate_stats_cache()`).
+  4. Invalidates the user's storage metrics cache (`invalidate_stats_cache()`).
 - **Response:** `200 OK` with final file metadata:
   ```json
   {

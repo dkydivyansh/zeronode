@@ -414,7 +414,7 @@ async function refreshStats(search = null) {
                     </p>
                 </td>
                 <td class="px-6 py-4 text-right">
-                    <button onclick="authorizeErasureProtocol('${row.user_id}', '${row.email}')" 
+                    <button onclick="confirmDeleteUser('${row.user_id}', '${row.email}')" 
                             class="font-label text-[9px] tracking-[0.2em] text-error/40 hover:text-error hover:bg-error/10 border border-error/10 hover:border-error/40 px-4 py-2 transition-all uppercase">
                         DELETE USER
                     </button>
@@ -464,7 +464,7 @@ function initiateUserSearch() {
     }, 400);
 }
 
-async function authorizeErasureProtocol(userId, email) {
+async function confirmDeleteUser(userId, email) {
     const confirmation = await ZNodeDialog.confirm("DELETE USER", `Are you sure you want to permanently delete user [${email}] and all of their stored files? This action cannot be undone.`);
     
     if (confirmation) {
