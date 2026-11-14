@@ -6,7 +6,7 @@ import time
 
 class Manifest(ModuleManifest):
     name        = "Admin"
-    description = "System administration and global telemetry."
+    description = "System administration and user management."
     admin_only  = True
     routes      = ["/", "/api/stats", "/api/promote", "/api/demote", "/api/whitelist/add", "/api/whitelist/remove", "/api/user/wipe", "/api/server/wipe"]
 
@@ -31,13 +31,13 @@ class Manifest(ModuleManifest):
         if path == "/api/user/wipe":
             data = request.json
             if not data or 'user_id' not in data:
-                return jsonify({"error": "IDENTITY_ID_REQUIRED"}), 400
+                return jsonify({"error": "User ID required"}), 400
             
-            # AUTHORIZATION_GATE: Physically de-provision the identity
+            # Delete user and associated data
             success = db_handler.wipe_user(data['user_id'], g.user['email'])
             
             return jsonify({
-                "status": "ERASURE_COMMITTED" if success else "AUTHORIZATION_FAILURE",
+                "status": "USER_DELETED" if success else "ACTION_FAILED",
                 "identity": data['user_id']
             }), 200 if success else 403
 
@@ -80,13 +80,13 @@ class Manifest(ModuleManifest):
             data = request.json
             expected = "ERASE ALL SERVER DATA"
             if not data or data.get('confirmation') != expected:
-                return jsonify({"error": "Forensic confirmation mismatch. Protocol aborted."}), 400
+                return jsonify({"error": "Confirmation text does not match. System reset aborted."}), 400
             
-            # AUTHORIZATION_GATE: Physically de-provision the entire server
+            # Reset the entire server installation
             success = db_handler.nuclear_wipe_server()
-            return jsonify({"status": "SYSTEM_LIQUIDATED" if success else "CRITICAL_FAILURE"}), 200 if success else 500
+            return jsonify({"status": "SYSTEM_RESET" if success else "RESET_FAILED"}), 200 if success else 500
 
-        return jsonify({"error": "Interface node not found"}), 404
+        return jsonify({"error": "Endpoint not found"}), 404
 
     def _render_home(self, module_name):
         manager = get_user_manager()

@@ -3,7 +3,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
-<title>ZERONODE // {% block title %}VAULT{% endblock %}</title>
+<title>ZeroNode // {% block title %}Drive{% endblock %}</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
 <script src="{{ url_for('static', filename='js/tailwind.js') }}?v={{ now_ts }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}?v={{ now_ts }}"/>
@@ -91,59 +91,59 @@
 </head>
 <body class="font-body selection:bg-primary selection:text-on-primary min-h-screen">
 
-<!-- Session Vault Overlay (Unskippable Glassmorphism Gateway) -->
+<!-- Session Vault Overlay (Glassmorphism Gateway) -->
 <div id="vault-overlay" class="hidden">
     <div class="vault-modal flex flex-col gap-6">
         <div>
-            <h1 id="vault-title" class="font-headline text-3xl tracking-widest text-[#e5e5e5] glitch-text uppercase mb-2">SYSTEM INITIALIZATION</h1>
-            <p id="vault-subtitle" class="font-label text-xs text-[#a0a0a0] tracking-wider uppercase">Validating secure session context...</p>
+            <h1 id="vault-title" class="font-headline text-3xl tracking-widest text-[#e5e5e5] uppercase mb-2">NEW CONFIGURATION</h1>
+            <p id="vault-subtitle" class="font-label text-xs text-[#a0a0a0] tracking-wider uppercase">Verifying browser security environment...</p>
         </div>
 
         <!-- Wizard Step 0: Security Audit -->
         <div id="vault-step-0" class="flex flex-col gap-4">
             <div id="security-check-list" class="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 font-mono text-[9px] tracking-widest leading-none">
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-crypto">
-                    <span>> CRYPTOGRAPHIC_CORE_SUBSYSTEM</span>
-                    <span class="status text-primary">SCNG...</span>
+                    <span>> Web Cryptography API</span>
+                    <span class="status text-primary">Checking...</span>
                 </div>
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-algos">
-                    <span>> CIPHER_SUITE_STRENGTH_TEST</span>
-                    <span class="status text-primary">WAIT...</span>
+                    <span>> AES-256-GCM Support</span>
+                    <span class="status text-primary">Pending...</span>
                 </div>
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-storage">
-                    <span>> PERSISTENCE_RELIABILITY_VECTOR</span>
-                    <span class="status text-primary">WAIT...</span>
+                    <span>> Persistent Client Storage</span>
+                    <span class="status text-primary">Pending...</span>
                 </div>
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-context">
-                    <span>> SECURE_CONTEXT_VALIDATION</span>
-                    <span class="status text-primary">WAIT...</span>
+                    <span>> Secure Context (HTTPS / Localhost)</span>
+                    <span class="status text-primary">Pending...</span>
                 </div>
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-isolation">
-                    <span>> ARCHITECTURAL_PROCESS_ISOLATION</span>
-                    <span class="status text-primary">WAIT...</span>
+                    <span>> Process Isolation</span>
+                    <span class="status text-primary">Pending...</span>
                 </div>
                 <div class="flex justify-between items-center py-1 opacity-50 transition-all font-bold" id="chk-behavior">
-                    <span>> ENVIRONMENTAL_FORENSIC_AUDIT</span>
-                    <span class="status text-primary">WAIT...</span>
+                    <span>> Browser Environment Integrity</span>
+                    <span class="status text-primary">Pending...</span>
                 </div>
             </div>
-            <div id="audit-feedback" class="font-label text-[10px] text-on-surface-variant/40 uppercase tracking-widest text-center mt-2">INITIALIZING DEEP SYSTEM SCAN...</div>
+            <div id="audit-feedback" class="font-label text-[10px] text-on-surface-variant/40 uppercase tracking-widest text-center mt-2">Verifying security environment...</div>
         </div>
         
         <!-- Wizard Step 1: Input -->
         <div id="vault-step-1" class="flex-col gap-3 hidden">
             <!-- Environment Trust Advisory -->
             <div class="mb-4 p-4 border-l-2 border-primary/20 bg-primary/5 flex flex-col gap-2">
-                <span class="font-mono text-[9px] text-primary tracking-widest uppercase opacity-60">SECURITY_ADVISORY</span>
+                <span class="font-mono text-[9px] text-primary tracking-widest uppercase opacity-60">Security Notice</span>
                 <p class="font-label text-[10px] text-on-surface-variant/80 leading-relaxed tracking-wide">
-                    ZeroNode executes all cryptographic operations within the <b>local browser context</b>. Ensure this environment is trusted and free of unauthorized monitoring. Data exposure resulting from hardware compromise or insecure terminals remains the sole liability of the user.
+                    ZeroNode executes all cryptographic operations within the <b>local browser context</b>. Ensure this environment is trusted and free of unauthorized monitoring. Data exposure resulting from hardware compromise or insecure terminals remains the sole responsibility of the user.
                 </p>
             </div>
             
             <input id="vault-pw" type="password" class="vault-input" placeholder="MASTER PASSWORD" />
             <input id="vault-confirm-pw" type="password" class="vault-input" placeholder="CONFIRM PASSWORD" style="display:none;" />
             <div id="vault-error" class="text-error font-label text-xs h-4"></div>
-            <a href="#" id="vault-forgot-pw" class="font-label text-xs tracking-widest text-[#a0a0a0] hover:text-primary transition-colors mt-2" style="display:none;">[FORGOT CREDENTIALS? RECOVER WITH SEED]</a>
+            <a href="#" id="vault-forgot-pw" class="font-label text-xs tracking-widest text-[#a0a0a0] hover:text-primary transition-colors mt-2" style="display:none;">[FORGOT PASSWORD? RECOVER WITH PHRASE]</a>
         </div>
 
         <!-- Wizard Step 2: Key Preview -->
@@ -155,22 +155,22 @@
 
         <!-- Wizard Step 3: Secure Phrase Setup -->
         <div id="vault-step-3" class="flex-col gap-3 hidden">
-            <p class="font-label text-xs text-error mb-2 leading-relaxed">CRITICAL: If you lose your password, these 12 words are the ONLY way to recover your vault. Write them down offline.</p>
+            <p class="font-label text-xs text-error mb-2 leading-relaxed">IMPORTANT: If you lose your password, these 12 words are the ONLY way to recover your drive. Write them down offline.</p>
             <div class="p-3 bg-surface border border-outline-variant/30 text-[#e5e5e5]">
                 <p id="vault-recovery-phrase" class="font-mono text-[13px] tracking-wider leading-loose break-words select-all"></p>
             </div>
-            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Select and copy, or write on physical paper.</p>
+            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Copy or write this phrase on physical paper and store securely.</p>
         </div>
 
         <!-- Wizard Step 4: Backup Details (Final) -->
         <div id="vault-step-4" class="flex-col gap-3 hidden">
-            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">Your Vault is initialized. You must download a local offline backup of your keys as an emergency archive to continue.</p>
-            <button id="vault-manual-dl-btn" class="w-full bg-primary/10 border border-primary text-primary flex justify-center items-center hover:bg-primary hover:text-black font-label text-xs tracking-widest py-3 uppercase transition-colors interactive-el mb-2">▼ DOWNLOAD VAULT ARCHIVE</button>
+            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">Your encryption keys are configured. Download a local offline backup of your keys to continue.</p>
+            <button id="vault-manual-dl-btn" class="w-full bg-primary/10 border border-primary text-primary flex justify-center items-center hover:bg-primary hover:text-black font-label text-xs tracking-widest py-3 uppercase transition-colors interactive-el mb-2">▼ DOWNLOAD BACKUP ARCHIVE</button>
         </div>
 
         <!-- Recovery Wizard Step 1: Input -->
         <div id="vault-recovery-step-1" class="flex-col gap-3 hidden">
-            <p class="font-label text-xs text-primary mb-2">Enter your OLD 12-word recovery phrase (space-separated).</p>
+            <p class="font-label text-xs text-primary mb-2">Enter your 12-word recovery phrase (space-separated).</p>
             <textarea id="vault-recovery-input" class="vault-input font-mono text-[12px] h-24 resize-none" placeholder="word1 word2 word3..."></textarea>
             <input id="vault-recovery-new-pw" type="password" class="vault-input mt-2" placeholder="NEW MASTER PASSWORD" />
             <div id="vault-recovery-error" class="text-error font-label text-[10px] h-4"></div>
@@ -178,16 +178,16 @@
 
         <!-- Recovery Wizard Step 2: New Phrase -->
         <div id="vault-recovery-step-2" class="flex-col gap-3 hidden">
-            <p class="font-label text-xs text-error mb-2 leading-relaxed">CRITICAL: Your old seed phrase has been voided. This is your NEW 12-word recovery phrase. Write it down offline.</p>
+            <p class="font-label text-xs text-error mb-2 leading-relaxed">IMPORTANT: Your old recovery phrase has been replaced. This is your NEW 12-word recovery phrase. Store it securely offline.</p>
             <div class="p-3 bg-surface border border-outline-variant/30 text-[#e5e5e5]">
                 <p id="vault-recovery-new-phrase" class="font-mono text-[13px] tracking-wider leading-loose break-words select-all"></p>
             </div>
-            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Select and copy, or write on physical paper.</p>
+            <p class="font-label text-[10px] text-[#a0a0a0] mt-1">Copy or write this phrase on physical paper and store securely.</p>
         </div>
 
         <!-- Recovery Wizard Step 3: Archive -->
         <div id="vault-recovery-step-3" class="flex-col gap-3 hidden">
-            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">System parameters rotated successfully. You must download a new local offline backup of your keys to proceed.</p>
+            <p class="font-label text-xs text-[#e5e5e5] mb-2 leading-relaxed">Credentials updated successfully. Download your new local offline backup of your keys to proceed.</p>
             <button id="vault-recovery-manual-dl-btn" class="w-full bg-primary/10 border border-primary text-primary flex justify-center items-center hover:bg-primary hover:text-black font-label text-xs tracking-widest py-3 uppercase transition-colors interactive-el mb-2">▼ DOWNLOAD RECOVERY ARCHIVE</button>
         </div>
 
@@ -195,7 +195,7 @@
             <span class="vault-btn-text">PLEASE WAIT</span>
             <div class="vault-spinner"></div>
         </button>
-        <button id="vault-back-btn" class="font-label text-xs tracking-widest text-on-surface-variant/40 hover:text-primary transition-colors interactive-el py-2 hidden uppercase">[ RETURN TO PREVIOUS ]</button>
+        <button id="vault-back-btn" class="font-label text-xs tracking-widest text-on-surface-variant/40 hover:text-primary transition-colors interactive-el py-2 hidden uppercase">[ BACK ]</button>
     </div>
 </div>
 
@@ -329,7 +329,7 @@
 <div id="znode-dialog-overlay" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
      <div id="znode-dialog-box" class="w-full max-w-sm mx-4 bg-[#121212] border border-white/5 shadow-2xl scale-95 transition-all duration-300 opacity-0">
          <div class="p-8">
-             <div id="znode-dialog-title" class="font-headline text-[10px] tracking-[0.2em] text-primary uppercase mb-3 opacity-60">SYSTEM NOTIFICATION</div>
+             <div id="znode-dialog-title" class="font-headline text-[10px] tracking-[0.2em] text-primary uppercase mb-3 opacity-60">NOTIFICATION</div>
              <div id="znode-dialog-body" class="font-label text-xs tracking-wider text-on-surface-variant leading-relaxed mb-6"></div>
              
              <!-- Prompt Input Container -->

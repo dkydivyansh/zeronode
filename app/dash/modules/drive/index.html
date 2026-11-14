@@ -11,12 +11,12 @@
                 <a href="#" class="hover:text-primary transition-colors interactive-el root-nav" data-id="">Drive</a>
                 <!-- JS injected breadcrumbs go here -->
             </div>
-            <h1 id="drive-current-folder" class="font-headline text-2xl md:text-3xl tracking-widest text-[#e5e5e5] uppercase truncate w-full">ROOT DIRECTORY</h1>
+            <h1 id="drive-current-folder" class="font-headline text-2xl md:text-3xl tracking-widest text-[#e5e5e5] uppercase truncate w-full">MY FILES</h1>
         </div>
         
         <!-- Controls -->
         <div class="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto justify-start md:justify-end">
-            <button id="drive-bulk-preview" class="p-2 text-on-surface-variant/40 hover:text-primary transition-all interactive-el" title="Decrypt All Previews">
+            <button id="drive-bulk-preview" class="p-2 text-on-surface-variant/40 hover:text-primary transition-all interactive-el" title="Load All Previews">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
             </button>
             <div class="flex items-center gap-2 flex-1 md:flex-none">
@@ -46,8 +46,8 @@
         <!-- Drag Overlay -->
         <div id="drag-overlay" class="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary z-30 hidden flex flex-col items-center justify-center backdrop-blur-sm">
             <svg class="w-12 h-12 text-primary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-            <span class="font-headline tracking-widest text-primary text-xl">DROP FILES TO ENCRYPT</span>
-            <span class="font-mono text-[10px] text-primary/70 mt-2">AES-256-GCM // E2EE ON THE FLY</span>
+            <span class="font-headline tracking-widest text-primary text-xl">DROP FILES TO UPLOAD</span>
+            <span class="font-mono text-[10px] text-primary/70 mt-2">AES-256-GCM CLIENT-SIDE ENCRYPTED</span>
         </div>
 
         <!-- Render Container (Grid/List) -->
@@ -55,7 +55,7 @@
             <!-- Loading State -->
             <div class="col-span-full flex flex-col items-center justify-center py-20 text-on-surface-variant/30">
                 <div class="vault-spinner mb-4 border-on-surface-variant/30 border-t-primary"></div>
-                <span class="font-mono text-[10px] tracking-widest">FETCHING MANIFEST...</span>
+                <span class="font-mono text-[10px] tracking-widest">LOADING FILES...</span>
             </div>
         </div>
     </div>
@@ -68,7 +68,7 @@
 <div id="context-menu" class="fixed inset-0 bg-black/80 z-[120] hidden items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-surface-container-high border border-outline-variant/30 shadow-2xl flex flex-col w-[90vw] md:w-[400px] max-w-full" id="context-menu-box">
         <div class="px-6 py-5 border-b border-outline-variant/20 mb-1 flex flex-col gap-1 bg-surface-container-highest">
-            <span class="font-mono text-[9px] text-primary uppercase tracking-widest opacity-60">TARGET FILE</span>
+            <span class="font-mono text-[9px] text-primary uppercase tracking-widest opacity-60">SELECTED FILE</span>
             <span id="ctx-header" class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase truncate block">item.pdf</span>
         </div>
         <div class="py-2 flex flex-col gap-1 px-2">
@@ -87,12 +87,12 @@
 <!-- Modal: New Folder -->
 <div id="modal-new-folder" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-surface-container-high border border-outline-variant/30 p-6 w-[90vw] md:w-96 max-w-full flex flex-col gap-4">
-        <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase mb-1">CREATE FOLDER</h2>
+        <h2 class="font-headline text-lg tracking-[0.2em] text-[#e5e5e5] uppercase mb-1">NEW FOLDER</h2>
         <div class="space-y-1">
             <input type="text" id="new-folder-name" 
                    class="w-full bg-surface border border-outline-variant/30 text-[#e5e5e5] font-mono text-sm px-4 py-3 leading-relaxed focus:outline-none focus:border-primary transition-all placeholder-on-surface-variant/30" 
                    placeholder="Folder Name">
-            <span class="font-mono text-[9px] text-on-surface-variant/40 uppercase tracking-widest pl-1">ENCRYPTED MANIFEST ENTRY</span>
+            <span class="font-mono text-[9px] text-on-surface-variant/40 uppercase tracking-widest pl-1">ENCRYPTED FOLDER</span>
         </div>
         <div class="flex justify-end gap-2 mt-4">
             <button class="modal-close font-label text-xs tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-4 py-2">Cancel</button>
@@ -127,7 +127,7 @@
     <div id="pv-surface" class="flex-1 relative flex items-center justify-center overflow-hidden p-12">
         <div id="pv-loader" class="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
             <div class="vault-spinner mb-4"></div>
-            <span class="font-mono text-[10px] tracking-widest text-primary">DECRYPTING ON THE FLY...</span>
+            <span class="font-mono text-[10px] tracking-widest text-primary">DECRYPTING PREVIEW...</span>
         </div>
         
         <!-- Content Renderers -->
@@ -192,7 +192,7 @@
 
 {% block dynamic_menu %}
 <button id="dynamic-new-folder" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2">
-    <span>+ FOLDER</span>
+    <span>+ NEW FOLDER</span>
 </button>
 <button id="dynamic-upload" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2">
     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>

@@ -280,7 +280,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ];
 
     const feedback = document.getElementById("audit-feedback");
-    feedback.innerText = "INITIALIZING_FORENSIC_AUDIT...";
+    feedback.innerText = "Verifying security environment...";
     feedback.className =
       "font-label text-[10px] text-on-surface-variant/40 uppercase tracking-widest text-center mt-2";
     let allPassed = true;
@@ -290,24 +290,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!el) continue;
 
       el.classList.remove("opacity-50");
-      el.querySelector(".status").innerText = "VERIFYING";
+      el.querySelector(".status").innerText = "Checking...";
       await new Promise((r) => setTimeout(r, 150));
 
       const passed = chk.check();
       const statusEl = el.querySelector(".status");
 
       if (passed) {
-        statusEl.innerText = "SUCCESS";
+        statusEl.innerText = "PASS";
         statusEl.className = "status text-tertiary font-bold";
       } else {
-        statusEl.innerText = "COMPROMISED";
+        statusEl.innerText = "FAIL";
         statusEl.className = "status text-error font-bold";
         allPassed = false;
       }
     }
 
     if (allPassed) {
-      feedback.innerText = "ENVIRONMENT_VERIFIED // ESTABLISHING CONTEXT...";
+      feedback.innerText = "Security check passed. Establishing session...";
       feedback.className =
         "font-label text-[10px] text-tertiary uppercase tracking-widest text-center mt-2";
       await new Promise((r) => setTimeout(r, 300));
@@ -331,12 +331,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       btn.classList.remove("loading");
       btn.disabled = false;
-      btnText.innerText = "[ CONTINUE ]";
+      btnText.innerText = "Continue Anyway";
       btn.className =
         "vault-btn !w-full !bg-error/10 !border-error/30 !text-error hover:!bg-error hover:!text-black uppercase";
 
       btn.onclick = () => {
-        console.warn("[Security] Manual Override Proceeding...");
+        console.warn("[Security] Proceeding with setup...");
         document.getElementById("vault-step-0").classList.add("hidden");
         document.getElementById("vault-step-0").style.display = "none";
         document.getElementById("vault-step-1").classList.remove("hidden");
@@ -362,9 +362,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function setupGenerationFlow() {
     document.getElementById("vault-title").textContent =
-      "NEW VAULT CONFIGURATION";
+      "NEW CONFIGURATION";
     document.getElementById("vault-subtitle").textContent =
-      "PHASE 1: ESTABLISH MASTER CREDENTIALS";
+      "STEP 1: CREATE MASTER PASSWORD";
 
     const pwInput = document.getElementById("vault-pw");
     const confirmInput = document.getElementById("vault-confirm-pw");
@@ -400,9 +400,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         step1.classList.remove("hidden");
         step1.style.display = "flex";
         document.getElementById("vault-title").textContent =
-          "NEW VAULT CONFIGURATION";
+          "NEW CONFIGURATION";
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 1: ESTABLISH MASTER CREDENTIALS";
+          "STEP 1: CREATE MASTER PASSWORD";
         btn.querySelector(".vault-btn-text").textContent =
           "PROCEED TO KEY GENERATION";
         backBtn.classList.add("hidden");
@@ -414,7 +414,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         step2.classList.remove("hidden");
         step2.style.display = "flex";
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 2: CRYPTOGRAPHIC ASSET PREVIEW";
+          "STEP 2: ENCRYPTION KEYS GENERATED";
         btn.querySelector(".vault-btn-text").textContent =
           "PROCEED TO RECOVERY SETUP";
         currentStep = 2;
@@ -424,9 +424,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         step3.classList.remove("hidden");
         step3.style.display = "flex";
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 3: SECURE SEED PHRASE";
+          "STEP 3: RECOVERY SEED PHRASE";
         btn.querySelector(".vault-btn-text").textContent =
-          "I HAVE WRITTEN THIS DOWN";
+          "I HAVE SAVED THIS PHRASE";
         currentStep = 3;
       }
     };
@@ -503,7 +503,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           step2.style.display = "flex";
 
           document.getElementById("vault-subtitle").textContent =
-            "PHASE 2: CRYPTOGRAPHIC ASSET PREVIEW";
+            "STEP 2: ENCRYPTION KEYS GENERATED";
           keyPreview.value = generatedBackupStr;
           btn.querySelector(".vault-btn-text").textContent =
             "PROCEED TO RECOVERY SETUP";
@@ -523,9 +523,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         step3.style.display = "flex";
 
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 3: SECURE SEED PHRASE";
+          "STEP 3: RECOVERY SEED PHRASE";
         btn.querySelector(".vault-btn-text").textContent =
-          "I HAVE WRITTEN THIS DOWN";
+          "I HAVE SAVED THIS PHRASE";
 
         currentStep = 3;
       } else if (currentStep === 3) {
@@ -535,7 +535,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         step4.style.display = "flex";
 
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 4: LOCAL ARCHIVE";
+          "STEP 4: BACKUP ENCRYPTION KEYS";
         btn.style.display = "none";
 
         document.getElementById("vault-manual-dl-btn").onclick = () => {
@@ -550,12 +550,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           URL.revokeObjectURL(url);
 
           document.getElementById("vault-manual-dl-btn").textContent =
-            "✓ ARCHIVE SAVED";
+            "✓ BACKUP SAVED";
           document
             .getElementById("vault-manual-dl-btn")
             .classList.add("text-success");
           btn.style.display = "flex";
-          btn.querySelector(".vault-btn-text").textContent = "INITIALIZE VAULT";
+          btn.querySelector(".vault-btn-text").textContent = "FINISH SETUP";
         };
 
         currentStep = 4;
@@ -571,11 +571,11 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (!uploadRes.ok) {
             if (uploadRes.status === 403) {
               console.warn(
-                "[Vault] Identity already established on server. Transitioning to unlock protocol.",
+                "[Auth] Account already configured. Switching to sign-in...",
               );
               setupUnlockFlow();
               error(
-                "Vault already initialized. Please provide existing credentials.",
+                "Configuration already complete. Please unlock your drive.",
               );
               return;
             }
@@ -607,9 +607,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function setupUnlockFlow() {
     document.getElementById("vault-title").textContent =
-      "SECURE SESSION REQUIRED";
+      "ENTER MASTER PASSWORD";
     document.getElementById("vault-subtitle").textContent =
-      "Provide Master Credentials to decrypt the session keys within local memory.";
+      "Enter your master password to unlock your encrypted drive.";
 
     const pwInput = document.getElementById("vault-pw");
     const forgotLink = document.getElementById("vault-forgot-pw");
@@ -628,7 +628,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btn = document.getElementById("vault-submit-btn");
     const backBtn = document.getElementById("vault-back-btn");
     btn.querySelector(".vault-btn-text").textContent =
-      "INITIALIZE SECURE SESSION";
+      "UNLOCK DRIVE";
     backBtn.style.display = "none";
 
     forgotLink.onclick = (e) => {
@@ -679,9 +679,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function setupRecoveryFlow() {
-    document.getElementById("vault-title").textContent = "SYSTEM RECOVERY";
+    document.getElementById("vault-title").textContent = "ACCOUNT RECOVERY";
     document.getElementById("vault-subtitle").textContent =
-      "OVERRIDE PROTOCOL: SEED PHRASE REQUIRED";
+      "Enter your 12-word recovery phrase and choose a new master password.";
 
     document.getElementById("vault-step-1").style.display = "none";
 
@@ -701,7 +701,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btn = document.getElementById("vault-submit-btn");
     const backBtn = document.getElementById("vault-back-btn");
 
-    btn.querySelector(".vault-btn-text").textContent = "VALIDATE PHRASE";
+    btn.querySelector(".vault-btn-text").textContent = "VERIFY RECOVERY PHRASE";
     backBtn.classList.remove("hidden");
     backBtn.style.display = "block";
 
@@ -723,8 +723,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         rStep1.classList.remove("hidden");
         rStep1.style.display = "flex";
         document.getElementById("vault-subtitle").textContent =
-          "OVERRIDE PROTOCOL: SEED PHRASE REQUIRED";
-        btn.querySelector(".vault-btn-text").textContent = "VALIDATE PHRASE";
+          "Enter your 12-word recovery phrase and choose a new master password.";
+        btn.querySelector(".vault-btn-text").textContent = "VERIFY RECOVERY PHRASE";
         currentStepR = 1;
       } else if (currentStepR === 3) {
         rStep3.classList.add("hidden");
@@ -732,9 +732,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         rStep2.classList.remove("hidden");
         rStep2.style.display = "flex";
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 2: SECURE NEW SEED PHRASE";
+          "STEP 2: NEW RECOVERY PHRASE";
         btn.querySelector(".vault-btn-text").textContent =
-          "I HAVE WRITTEN THIS DOWN";
+          "I HAVE SAVED THIS PHRASE";
         currentStepR = 2;
       }
     };
@@ -833,9 +833,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           rStep2.style.display = "flex";
 
           document.getElementById("vault-subtitle").textContent =
-            "PHASE 2: SECURE NEW SEED PHRASE";
+            "STEP 2: NEW RECOVERY PHRASE";
           btn.querySelector(".vault-btn-text").textContent =
-            "I HAVE WRITTEN THIS DOWN";
+            "I HAVE SAVED THIS PHRASE";
           currentStepR = 2;
         } catch (err) {
           console.error(err);
@@ -849,7 +849,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         rStep3.style.display = "flex";
 
         document.getElementById("vault-subtitle").textContent =
-          "PHASE 3: ROTATE AND ARCHIVE";
+          "STEP 3: DOWNLOAD NEW BACKUP";
         btn.style.display = "none";
 
         document.getElementById("vault-recovery-manual-dl-btn").onclick =
@@ -866,13 +866,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             document.getElementById(
               "vault-recovery-manual-dl-btn",
-            ).textContent = "✓ ARCHIVE SAVED";
+            ).textContent = "✓ BACKUP SAVED";
             document
               .getElementById("vault-recovery-manual-dl-btn")
               .classList.add("text-success");
             btn.style.display = "flex";
             btn.querySelector(".vault-btn-text").textContent =
-              "AUTHORIZE SYSTEM OVERWRITE";
+              "UPDATE CREDENTIALS";
           };
 
         currentStepR = 3;
@@ -885,7 +885,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             body: JSON.stringify(recoveryUploadPayload),
           });
           if (!resetRes.ok)
-            throw new Error("Could not apply system overwrite.");
+            throw new Error("Could not update credentials.");
 
           sessionStorage.setItem("vault_pub", recoverySessionData.vault_pub);
           sessionStorage.setItem("vault_priv", recoverySessionData.vault_priv);
@@ -960,7 +960,7 @@ class ZNodeDialog {
   }
 
   static async show({
-    title = "SYSTEM NOTIFICATION",
+    title = "NOTIFICATION",
     body = "",
     type = "alert",
     defaultValue = "",

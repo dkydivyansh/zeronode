@@ -17,7 +17,6 @@ async function initOPFSWorkspace() {
     for await (const entry of root.values()) {
       if (entry.name.startsWith("temp_decrypted_")) {
         await root.removeEntry(entry.name);
-        showZNodeToast(`[OPFS] Cleaned orphaned file: ${entry.name}`, "info");
         console.log(`[OPFS] Cleaned orphaned file: ${entry.name}`);
       }
     }
@@ -37,7 +36,6 @@ async function cleanupOPFS(uuid) {
     const root = await navigator.storage.getDirectory();
     const fileName = `temp_decrypted_${uuid}`;
     await root.removeEntry(fileName);
-    showZNodeToast(`[OPFS] Cleaned up: ${fileName}`, "info");
     console.log(`[OPFS] Cleaned up: ${fileName}`);
   } catch (err) {
     // If it's already gone, that's fine
@@ -243,8 +241,8 @@ async function updateCacheCountUI() {
       btn.onclick = async () => {
         if (
           await ZNodeDialog.confirm(
-            "VAULT CACHE",
-            "Clear local encrypted persistent cache? This only affects local speeds, NOT your cloud files.",
+            "CLEAR CACHE",
+            "Clear local cached files? This will free local storage without affecting your files on the server.",
           )
         ) {
           await clearCache();
@@ -552,7 +550,7 @@ function getNameWithoutMD(name) {
 }
 
 async function createNewNote() {
-  const title = await ZNodeDialog.prompt("NEW NOTE", "Enter note title:");
+  const title = await ZNodeDialog.prompt("New Note", "Enter note title:");
   if (!title) return;
 
   let fileName = title;
@@ -599,7 +597,7 @@ async function createNewNote() {
     await fetch(`${FILE_API}/${uuid}/finalize`, { method: "POST" });
 
     completeTransfer(tfId);
-    showZNodeToast(`NOTE CREATED: ${title}`, "info");
+    showZNodeToast(`Note created: ${title}`, "info");
     await fetchDrive(currentFolderId);
 
     // Auto-open
@@ -620,7 +618,7 @@ async function createNewNote() {
   } catch (e) {
     console.error(e);
     failTransfer(tfId);
-    showZNodeToast(`FAILED TO CREATE NOTE: ${e.message}`, "error");
+    showZNodeToast(`Failed to create note: ${e.message}`, "error");
   }
 }
 
@@ -1482,8 +1480,8 @@ function initDriveControls() {
   if (bulkBtn) {
     bulkBtn.onclick = async () => {
       const confirmed = await ZNodeDialog.confirm(
-        "BULK DECRYPTION",
-        "Decrypt all media previews for this folder? This will use bandwidth and local processing.",
+        "LOAD ALL PREVIEWS",
+        "Decrypt and load media previews for all files in this folder? This will use bandwidth and local processing.",
       );
       if (confirmed) decryptFolderMedia();
     };
@@ -1510,8 +1508,8 @@ function initDriveControls() {
       if (action === "delete") {
         if (
           await ZNodeDialog.confirm(
-            "PERMANENT DELETION",
-            `Are you sure you want to delete this ${type}? This cannot be undone.`,
+            "DELETE",
+            `Are you sure you want to permanently delete this ${type}? This action cannot be undone.`,
           )
         ) {
           await fetch(
@@ -1521,7 +1519,7 @@ function initDriveControls() {
             { method: "POST" },
           );
           showZNodeToast(
-            `${type.toUpperCase()} DELETED: ${activeCtxItem.name}`,
+            `Deleted: ${activeCtxItem.name}`,
             "info",
           );
           fetchDrive(currentFolderId);
@@ -1535,7 +1533,7 @@ function initDriveControls() {
           : activeCtxItem.name;
 
         let nn = await ZNodeDialog.prompt(
-          "RENAME ITEM",
+          "RENAME",
           `Enter new name for this ${type}:`,
           displayName,
         );
@@ -1716,7 +1714,7 @@ function initDriveControls() {
             const chunk = blob.slice(0, MAX_RAW_READ_SIZE);
             t = await chunk.text();
             isTruncated = true;
-            showZNodeToast("FILE TRUNCATED TO CONSERVE MEMORY.", "error");
+            showZNodeToast("Preview truncated due to file size.", "info");
           } else {
             t = await blob.text();
           }
@@ -1977,13 +1975,13 @@ async function uploadFile(file, tfId) {
     }
 
     completeTransfer(tfId);
-    showZNodeToast(`UPLOADED: ${file.name}`, "info");
+    showZNodeToast(`Uploaded: ${file.name}`, "info");
     if (document.getElementById("item-container")) fetchDrive(currentFolderId);
     return uuid;
   } catch (err) {
     console.error(err);
     failTransfer(tfId);
-    showZNodeToast(`FAILED: ${file.name} - ${err.message}`, "error");
+    showZNodeToast(`Upload failed: ${file.name} - ${err.message}`, "error");
   }
 }
 

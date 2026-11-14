@@ -384,19 +384,18 @@ def api_search():
     results = manager.search(query, limit)
     return jsonify(results), 200
 
-# ─── Security & Identity Erasure API ──────────────────────────
+# ─── Security & Account Deletion API ──────────────────────────
 
 @dashboard_bp.route('/api/user/self_wipe', methods=['POST'])
 def api_self_wipe():
     """
-    NUCLEAR_SELF_ERASURE: Authoritatively de-provisions the current identity.
-    Requires forensic confirmation string-match.
+    Permanently deletes the current user account and stored files.
     """
     data = request.get_json(silent=True)
     expected = "I want to wipe my data"
     
     if not data or data.get('confirmation') != expected:
-        return jsonify({"error": "Forensic confirmation mismatch. Protocol aborted."}), 400
+        return jsonify({"error": "Confirmation phrase did not match. Deletion aborted."}), 400
         
     user_id = g.user['user_id']
     from app.modules import db_handler
@@ -405,5 +404,5 @@ def api_self_wipe():
     if success:
         return jsonify({"status": "IDENTITY_PURGED", "redirect": "/auth/logout?auto=1"}), 200
     else:
-        return jsonify({"error": "Identity de-provisioning internal failure."}), 500
+        return jsonify({"error": "Account deletion failed due to an internal error."}), 500
 

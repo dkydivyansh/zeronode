@@ -2,29 +2,29 @@
 {% block title %}ADMIN CONTROL{% endblock %}
 
 {% block dynamic_menu %}
-<button onclick="window.location.reload()" class="font-label text-[10px] text-primary interactive-el uppercase px-6 py-2.5 border border-primary/40 bg-primary/5 hover:bg-primary hover:text-black transition-all tracking-[0.2em] font-bold">FORCE_SYSTEM_RESCAN</button>
+<button onclick="window.location.reload()" class="font-label text-[10px] text-primary interactive-el uppercase px-6 py-2.5 border border-primary/40 bg-primary/5 hover:bg-primary hover:text-black transition-all tracking-[0.2em] font-bold">REFRESH STATS</button>
 {% endblock %}
 
 {% block content %}
 <div class="px-8 pt-12 pb-24">
     <!-- Header -->
-    <div class="mb-16 border-l-2 border-error pl-8">
-        <h1 class="font-headline text-4xl md:text-6xl font-bold tracking-[0.1em] text-on-surface mb-3 uppercase glitch-text">
-            ADMIN_COMMAND
+    <div class="mb-16 border-l-2 border-primary pl-8">
+        <h1 class="font-headline text-4xl md:text-6xl font-bold tracking-[0.1em] text-on-surface mb-3 uppercase">
+            ADMIN CONSOLE
         </h1>
-        <p class="font-label text-[10px] tracking-[0.5em] text-error/80 uppercase flex items-center gap-3">
-            <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
-            PRIVILEGED_ACCESS_EXPECTED // SCOPE: {{ 'ADMIN' if user.is_admin else user.scope | upper }}
+        <p class="font-label text-[10px] tracking-[0.3em] text-primary uppercase flex items-center gap-3">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            ADMINISTRATOR PORTAL &bull; {{ 'FULL ADMIN' if user.is_admin else user.scope | upper }}
         </p>
     </div>
 
     <div class="mb-12">
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-12">
-        <!-- Storage Telemetry (Left/Middle) -->
+        <!-- Storage Overview (Left/Middle) -->
         <div class="lg:col-span-2 border border-outline-variant/10 p-8 bg-surface-container/30 backdrop-blur-md relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
             <div class="flex justify-between items-center mb-10">
-                <p class="font-label text-[10px] tracking-[0.3em] text-primary/60 uppercase">INTERNAL_STORAGE_TELEMETRY</p>
+                <p class="font-label text-[10px] tracking-[0.3em] text-primary/60 uppercase">STORAGE OVERVIEW</p>
                 <div class="flex items-center gap-2">
                     <span id="disk-percent" class="font-mono text-xs text-primary">{{ stats.server_drive.percent }}%</span>
                     <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
@@ -50,39 +50,39 @@
             </div>
         </div>
 
-        <!-- System Liquidation (Right) -->
+        <!-- Reset Server (Right) -->
         <div class="border border-error/20 p-8 bg-error/5 relative overflow-hidden group flex flex-col justify-between">
             <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-error/30 to-transparent"></div>
             <div>
-                <h2 class="font-headline text-lg tracking-[0.4em] text-error uppercase mb-4 glitch-text">System_Liquidation</h2>
-                <p class="font-label text-[9px] tracking-[0.2em] text-on-surface-variant/40 uppercase leading-relaxed mb-6">
-                    AUTHORITATIVE_PURGE: De-provision server, purge .env, database, and all data volumes.
+                <h2 class="font-headline text-lg tracking-[0.2em] text-error uppercase mb-4">Reset Server</h2>
+                <p class="font-label text-[9px] tracking-[0.1em] text-on-surface-variant/60 uppercase leading-relaxed mb-6">
+                    PERMANENT RESET: Purge database, configuration, and all stored user file volumes.
                 </p>
             </div>
             
-            <button onclick="authorizeSystemLiquidation()" class="w-full border border-error/40 py-4 font-label text-[9px] tracking-[0.4em] font-bold text-error uppercase hover:bg-error hover:text-black transition-all duration-500 shadow-[0_0_15px_rgba(238,125,119,0.05)] hover:shadow-[0_0_30px_rgba(238,125,119,0.1)]">
-                Wipe_Server
+            <button onclick="authorizeSystemReset()" class="w-full border border-error/40 py-4 font-label text-[9px] tracking-[0.2em] font-bold text-error uppercase hover:bg-error hover:text-black transition-all duration-500 shadow-[0_0_15px_rgba(238,125,119,0.05)] hover:shadow-[0_0_30px_rgba(238,125,119,0.1)]">
+                Reset Server
             </button>
         </div>
     </div>
     </div>
 
-    <!-- Section: User Management & Identity Auditing -->
+    <!-- Section: User Management -->
     <div class="mb-20">
         <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
             <div class="flex-1">
                 <div class="flex items-center gap-4 mb-2">
-                    <h2 class="font-headline text-2xl tracking-[0.3em] text-on-surface uppercase">USER_MANAGEMENT</h2>
+                    <h2 class="font-headline text-2xl tracking-[0.2em] text-on-surface uppercase">USER MANAGEMENT</h2>
                     <div class="h-[1px] flex-1 bg-gradient-to-r from-outline-variant/40 to-transparent"></div>
                 </div>
-                <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase">AUTHORITATIVE_IDENTITY_LEDGER // RECENT_10_NODES</p>
+                <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase">REGISTERED USERS & STORAGE ALLOCATION</p>
             </div>
             
             <div class="w-full md:w-80">
                 <div class="relative group">
                     <input type="text" id="user-search-query" 
-                           oninput="initiateForensicSearch()"
-                           placeholder="SEARCH_IDENTITY_OR_ID" 
+                           oninput="initiateUserSearch()"
+                           placeholder="SEARCH USERS BY NAME OR ID" 
                            class="w-full bg-surface-container/50 border border-outline-variant/20 px-4 py-3 font-mono text-[10px] text-on-surface focus:border-primary outline-none transition-all tracking-widest placeholder:text-on-surface-variant/20">
                     <div class="absolute right-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary/20 group-focus-within:bg-primary transition-colors"></div>
                 </div>
@@ -93,15 +93,15 @@
             <table class="w-full text-left font-label text-[11px] tracking-wide border-collapse">
                 <thead>
                     <tr class="bg-white/5 uppercase text-on-surface-variant/60">
-                        <th class="px-6 py-5 font-bold tracking-widest">Identity_Target</th>
-                        <th class="px-6 py-5 font-bold tracking-widest">Remote_ID</th>
-                        <th class="px-6 py-5 font-bold tracking-widest">Resource_Utilization</th>
-                        <th class="px-6 py-5 font-bold tracking-widest text-right">Operational_Gate</th>
+                        <th class="px-6 py-5 font-bold tracking-widest">User</th>
+                        <th class="px-6 py-5 font-bold tracking-widest">User ID</th>
+                        <th class="px-6 py-5 font-bold tracking-widest">Storage Used</th>
+                        <th class="px-6 py-5 font-bold tracking-widest text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="storage-table-body">
                     <tr class="animate-pulse">
-                        <td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/40 uppercase tracking-[0.5em]">Synchronizing Identity Volumes...</td>
+                        <td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/40 uppercase tracking-[0.3em]">Loading user data...</td>
                     </tr>
                 </tbody>
             </table>
@@ -114,7 +114,7 @@
         <!-- Whitelist Management -->
         <div class="mb-12 lg:mb-0">
             <div class="flex justify-between items-end mb-8">
-                <h2 class="font-headline text-xl tracking-[0.3em] text-on-surface uppercase">GLOBAL_WHITELIST</h2>
+                <h2 class="font-headline text-xl tracking-[0.2em] text-on-surface uppercase">ACCESS WHITELIST</h2>
                 <div class="flex gap-2">
                     <input type="email" id="new-whitelist-email" placeholder="USER EMAIL" class="bg-black/40 border border-outline-variant/20 px-3 py-1.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
                     <button onclick="addToWhitelist()" class="px-4 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase transition-all">Add</button>
@@ -132,7 +132,7 @@
         <!-- Administrative Ranks -->
         <div>
             <div class="mb-8 h-[29px] flex items-end">
-                 <h2 class="font-headline text-xl tracking-[0.3em] text-on-surface uppercase">ADMINISTRATIVE_TIER</h2>
+                 <h2 class="font-headline text-xl tracking-[0.2em] text-on-surface uppercase">ADMINISTRATORS</h2>
             </div>
             <div class="border border-outline-variant/10 bg-surface-container/20">
                 <table class="w-full text-left font-label text-[10px] tracking-widest">
@@ -192,14 +192,14 @@ async function refreshStats(search = null) {
                 <td class="px-6 py-4 text-right">
                     <button onclick="authorizeErasureProtocol('${row.user_id}', '${row.email}')" 
                             class="font-label text-[9px] tracking-[0.2em] text-error/40 hover:text-error hover:bg-error/10 border border-error/10 hover:border-error/40 px-4 py-2 transition-all uppercase">
-                        ERASE_IDENTITY
+                        DELETE USER
                     </button>
                 </td>
             </tr>
         `).join('');
 
         if (data.storage_report.length === 0) {
-            storageBody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/20 uppercase tracking-[0.5em]">No Identity Matches Found</td></tr>';
+            storageBody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-on-surface-variant/20 uppercase tracking-[0.3em]">No users found</td></tr>';
         }
 
         // 3. Update Whitelist
@@ -208,8 +208,8 @@ async function refreshStats(search = null) {
             <tr class="border-t border-outline-variant/10 group">
                 <td class="px-6 py-3 font-mono text-on-surface">${row.email}</td>
                 <td class="px-6 py-3 text-right flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
-                    <button onclick="promote('${row.email}')" class="text-tertiary hover:underline uppercase">PROMOTE_TO_ADMIN</button>
-                    <button onclick="removeFromWhitelist('${row.email}')" class="text-error hover:underline uppercase">REVOKE_ACCESS</button>
+                    <button onclick="promote('${row.email}')" class="text-tertiary hover:underline uppercase">Promote to Admin</button>
+                    <button onclick="removeFromWhitelist('${row.email}')" class="text-error hover:underline uppercase">Revoke Access</button>
                 </td>
             </tr>
         `).join('');
@@ -221,18 +221,18 @@ async function refreshStats(search = null) {
                 <td class="px-6 py-3 font-mono text-tertiary">${row.email}</td>
                 <td class="px-6 py-3 text-right flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all">
                     ${row.email.toLowerCase() !== "{{ user.email.lower() }}" ? `
-                    <button onclick="demote('${row.email}')" class="text-error hover:underline uppercase">REVOKE_PRIVILEGES</button>
-                    ` : '<span class="text-on-surface-variant/20 uppercase">ROOT_ADMIN</span>'}
+                    <button onclick="demote('${row.email}')" class="text-error hover:underline uppercase">Revoke Admin</button>
+                    ` : '<span class="text-on-surface-variant/40 uppercase">Primary Admin</span>'}
                 </td>
             </tr>
         `).join('');
 
     } catch (e) {
-        console.error("TELEMETRY_FAILURE:", e);
+        console.error("STATS_FETCH_FAILURE:", e);
     }
 }
 
-function initiateForensicSearch() {
+function initiateUserSearch() {
     clearTimeout(searchTimeout);
     const query = document.getElementById('user-search-query').value;
     searchTimeout = setTimeout(() => {
@@ -241,10 +241,10 @@ function initiateForensicSearch() {
 }
 
 async function authorizeErasureProtocol(userId, email) {
-    const confirmation = await ZNodeDialog.confirm("AUTHORIZE_ERASURE_PROTOCOL", `You are about to physically de-provision identity [${email}] and purge all associated data volumes. This action is IRREVERSIBLE. Proceed?`);
+    const confirmation = await ZNodeDialog.confirm("DELETE USER", `Are you sure you want to permanently delete user [${email}] and all of their stored files? This action cannot be undone.`);
     
     if (confirmation) {
-        const finalCheck = await ZNodeDialog.confirm("FINAL_VALIDATION", `Authoritatively confirm de-provisioning for ${userId}?`);
+        const finalCheck = await ZNodeDialog.confirm("CONFIRM DELETION", `Confirm permanent deletion for ${userId}?`);
         if (!finalCheck) return;
 
         try {
@@ -256,14 +256,14 @@ async function authorizeErasureProtocol(userId, email) {
             
             if (res.ok) {
                 const data = await res.json();
-                await ZNodeDialog.alert("ERASURE_PROTOCOL_COMMITTED", `Identity ${data.identity} has been physically de-provisioned.`);
+                await ZNodeDialog.alert("USER DELETED", `User ${data.identity} has been permanently deleted.`);
                 refreshStats(document.getElementById('user-search-query').value);
             } else {
                 const err = await res.json();
-                await ZNodeDialog.alert("AUTHORIZATION_FAILURE", err.error || 'Identity erasure denied.');
+                await ZNodeDialog.alert("ACTION FAILED", err.error || 'Failed to delete user.');
             }
         } catch (e) {
-            console.error("ERASURE_PROTOCOL_FAILURE:", e);
+            console.error("DELETE_USER_FAILURE:", e);
         }
     }
 }
@@ -283,7 +283,7 @@ async function addToWhitelist() {
 }
 
 async function removeFromWhitelist(email) {
-    if (!await ZNodeDialog.confirm("EVICTION_PROTOCOL", `EVICT ${email} from the global vault?`)) return;
+    if (!await ZNodeDialog.confirm("REVOKE ACCESS", `Remove ${email} from the whitelist?`)) return;
     const res = await fetch('/app/admin/api/whitelist/remove', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -293,7 +293,7 @@ async function removeFromWhitelist(email) {
 }
 
 async function promote(email) {
-    if (!await ZNodeDialog.confirm("AUTHORIZE_PROMOTION", `ELEVATE ${email} to the Administrative Tier?`)) return;
+    if (!await ZNodeDialog.confirm("PROMOTE USER", `Promote ${email} to Administrator?`)) return;
     const res = await fetch('/app/admin/api/promote', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -303,7 +303,7 @@ async function promote(email) {
 }
 
 async function demote(email) {
-    if (!await ZNodeDialog.confirm("AUTHORIZE_REVOCATION", `REVOKE administrative privileges from ${email}?`)) return;
+    if (!await ZNodeDialog.confirm("REVOKE ADMIN", `Revoke administrative privileges from ${email}?`)) return;
     const res = await fetch('/app/admin/api/demote', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -312,33 +312,33 @@ async function demote(email) {
     refreshStats(document.getElementById('user-search-query').value);
 }
 
-async function authorizeSystemLiquidation() {
+async function authorizeSystemReset() {
     const warning = await ZNodeDialog.confirm(
-        "CRITICAL_SYSTEM_ALERT",
-        "You are about to authoritatively LIQUIDATE the entire server infrastructure. This will PERMANENTLY destroy all configurations, databases, and user data volumes. Proceed?"
+        "RESET SERVER",
+        "WARNING: You are about to permanently delete all server configurations, databases, and stored user data. Are you sure you want to proceed?"
     );
     
     if (!warning) return;
     
     const finalWarning = await ZNodeDialog.confirm(
-        "LIQUIDATION_COMMITMENT",
-        "WARNING: This action is irreversible. All vault assets will be physically purged. Still proceed?"
+        "CONFIRM PERMANENT RESET",
+        "All data and accounts will be permanently destroyed. Are you completely sure you want to proceed?"
     );
     
     if (!finalWarning) return;
     
     const expected = "ERASE ALL SERVER DATA";
     const input = await ZNodeDialog.prompt(
-        "FORENSIC_AUTHORIZATION",
-        `Type "${expected}" to authorize system de-provisioning:`
+        "FINAL CONFIRMATION",
+        `Type "${expected}" to authorize complete server reset:`
     );
     
     if (input !== expected) {
-        await ZNodeDialog.alert("PROTOCOL_ABORTED", "Forensic confirmation mismatch. System gate remains locked.");
+        await ZNodeDialog.alert("CANCELLED", "Confirmation text did not match. Server reset cancelled.");
         return;
     }
     
-    await ZNodeDialog.alert("LIQUIDATION_COMMITTED", "System de-provisioning node authorized. Executing absolute purge...");
+    await ZNodeDialog.alert("RESETTING SERVER", "Server reset authorized. Executing data purge...");
     
     try {
         const res = await fetch('/app/admin/api/server/wipe', {
@@ -351,10 +351,10 @@ async function authorizeSystemLiquidation() {
             window.location.href = '/auth/logout?auto=1&terminal=1';
         } else {
             const err = await res.json();
-            await ZNodeDialog.alert("LIQUIDATION_FAILURE", err.error || "System liquidation reported an internal failure.");
+            await ZNodeDialog.alert("RESET FAILED", err.error || "Server reset failed.");
         }
     } catch (e) {
-        console.error("LIQUIDATION_FAILURE:", e);
+        console.error("RESET_FAILURE:", e);
         // Page may go down during wipe, redirect anyway to clear context
         window.location.href = '/auth/logout?auto=1';
     }
