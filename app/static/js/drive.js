@@ -1880,7 +1880,7 @@ async function processUploadQueue(file) {
   }
 }
 
-async function uploadFile(file, tfId, entityType = "subject") {
+async function uploadFile(file, tfId) {
   if (!file) return;
   if (file.size === 0 && !file.name.endsWith(".md")) {
     failTransfer(tfId);
@@ -1905,9 +1905,7 @@ async function uploadFile(file, tfId, entityType = "subject") {
       body: JSON.stringify({
         file_name: file.name,
         aes_key: wrappedKey64,
-        folder_id: window.currentSubjectUuid ? null : currentFolderId,
-        subject_uuid: window.currentSubjectUuid || null,
-        entity_type: entityType
+        folder_id: currentFolderId || null,
       }),
     });
     const { uuid } = await initRes.json();

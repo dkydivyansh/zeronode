@@ -342,9 +342,7 @@ def destroy_user_sessions(user_id: str) -> int:
 
 def get_server_drive_info() -> dict:
     """Get OS-level disk stats for the vault DATA_DIR."""
-    # current_app might not be available if called outside request, 
-    # but we know DATA_DIR is relative to this file
-    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+    data_dir = DATA_DIR
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)
         
@@ -361,7 +359,7 @@ def get_user_storage_report() -> list:
     Detailed storage consumption report per user.
     Scans the data/ directory and joins with user emails.
     """
-    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+    data_dir = DATA_DIR
     if not os.path.exists(data_dir):
         return []
 
@@ -417,7 +415,7 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
         conn.close()
 
     # 2. Physical Volume Erasure (Robust Walker)
-    data_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', user_id))
+    data_dir = os.path.normpath(os.path.join(DATA_DIR, user_id))
     
     def force_remove_readonly(func, path, excinfo):
         """Authoritative error handler to break file locks/readonly attributes."""
@@ -495,7 +493,7 @@ def nuclear_wipe_server() -> bool:
     """
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
     env_path = os.path.normpath(os.path.join(root_dir, '.env'))
-    data_dir = os.path.normpath(os.path.join(root_dir, 'data'))
+    data_dir = os.path.normpath(DATA_DIR)
     db_path = os.path.normpath(DB_PATH)
     
     def force_remove_readonly(func, path, excinfo):
@@ -563,7 +561,7 @@ def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
     conn.close()
 
     report = []
-    data_dir_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data')
+    data_dir_root = DATA_DIR
 
     for row in rows:
         user_id = row['user_id']
