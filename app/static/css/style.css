@@ -91,3 +91,12 @@
     position: relative;
     display: inline-block;
 }
+
+/* Scrollbar concealment utility for touch & tablet scrolling */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

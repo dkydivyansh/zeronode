@@ -84,6 +84,7 @@ def init_db():
             progress        INTEGER DEFAULT 0,
             current_step    TEXT DEFAULT '',
             started_at      INTEGER NOT NULL,
+            updated_at      INTEGER DEFAULT 0,
             completed_at    INTEGER DEFAULT 0,
             error_message   TEXT DEFAULT '',
             backup_filename TEXT DEFAULT '',
@@ -100,11 +101,21 @@ def init_db():
             progress        INTEGER DEFAULT 0,
             current_step    TEXT DEFAULT '',
             started_at      INTEGER NOT NULL,
+            updated_at      INTEGER DEFAULT 0,
             completed_at    INTEGER DEFAULT 0,
             error_message   TEXT DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_restore_tasks_target ON restore_tasks(target_id, started_at DESC);
     """)
+
+    # Migration: Ensure updated_at column exists in existing tables
+    b_cols = [c[1] for c in conn.execute("PRAGMA table_info(backup_tasks)").fetchall()]
+    if 'updated_at' not in b_cols:
+        conn.execute("ALTER TABLE backup_tasks ADD COLUMN updated_at INTEGER DEFAULT 0")
+
+    r_cols = [c[1] for c in conn.execute("PRAGMA table_info(restore_tasks)").fetchall()]
+    if 'updated_at' not in r_cols:
+        conn.execute("ALTER TABLE restore_tasks ADD COLUMN updated_at INTEGER DEFAULT 0")
 
     conn.commit()
 
@@ -773,9 +784,9 @@ def create_backup_task(task_id: str, target_type: str, target_id: str) -> bool:
     conn = _get_conn()
     now = int(time.time())
     conn.execute("""
-        INSERT OR REPLACE INTO backup_tasks (task_id, target_type, target_id, status, progress, current_step, started_at)
-        VALUES (?, ?, ?, 'running', 0, 'Initiating backup...', ?)
-    """, (task_id, target_type, target_id, now))
+        INSERT OR REPLACE INTO backup_tasks (task_id, target_type, target_id, status, progress, current_step, started_at, updated_at)
+        VALUES (?, ?, ?, 'running', 0, 'Initiating backup...', ?, ?)
+    """, (task_id, target_type, target_id, now, now))
     conn.commit()
     conn.close()
     return True
@@ -783,7 +794,7 @@ def create_backup_task(task_id: str, target_type: str, target_id: str) -> bool:
 def update_backup_task(task_id: str, **kwargs) -> bool:
     """Update progress, status, or details of an active backup task."""
     conn = _get_conn()
-    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message', 'backup_filename', 'backup_hash']
+    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message', 'backup_filename', 'backup_hash', 'updated_at']
     updates = []
     params = []
     for k, v in kwargs.items():
@@ -791,9 +802,14 @@ def update_backup_task(task_id: str, **kwargs) -> bool:
             updates.append(f"{k} = ?")
             params.append(v)
             
+    now = int(time.time())
+    if 'updated_at' not in kwargs:
+        updates.append("updated_at = ?")
+        params.append(now)
+
     if kwargs.get('status') in ['success', 'failed'] and 'completed_at' not in kwargs:
         updates.append("completed_at = ?")
-        params.append(int(time.time()))
+        params.append(now)
         
     if not updates:
         conn.close()
@@ -851,10 +867,11 @@ def record_backup_result(target_type: str, target_id: str, success: bool, size: 
     conn.close()
     return True
 
-def cleanup_stale_backup_tasks(timeout_seconds: int = 180) -> int:
+def cleanup_stale_backup_tasks(timeout_seconds: int = 900) -> int:
     """
     STALE TASK HEALING: Automatically marks tasks in 'running' state as failed
-    if their started_at exceeds the timeout threshold. Prevents tasks from being stuck at 2% or any state.
+    if their last heartbeat (updated_at) has had no activity for the timeout threshold (default: 15 minutes).
+    Prevents active multi-gigabyte uploads (e.g. 34 GB) from being prematurely terminated.
     """
     now = int(time.time())
     stale_threshold = now - timeout_seconds
@@ -862,9 +879,10 @@ def cleanup_stale_backup_tasks(timeout_seconds: int = 180) -> int:
     cursor = conn.execute("""
         UPDATE backup_tasks
         SET status = 'failed',
-            error_message = 'Task timed out or was interrupted.',
+            error_message = 'Task timed out due to inactivity.',
             completed_at = ?
-        WHERE status = 'running' AND started_at < ?
+        WHERE status = 'running' 
+          AND (CASE WHEN updated_at > 0 THEN updated_at ELSE started_at END) < ?
     """, (now, stale_threshold))
     conn.commit()
     count = cursor.rowcount
@@ -930,9 +948,9 @@ def create_restore_task(task_id: str, target_type: str, target_id: str, backup_i
     conn = _get_conn()
     now = int(time.time())
     conn.execute("""
-        INSERT OR REPLACE INTO restore_tasks (task_id, target_type, target_id, backup_id, status, progress, current_step, started_at)
-        VALUES (?, ?, ?, ?, 'running', 0, 'Initiating restore...', ?)
-    """, (task_id, target_type, target_id, backup_id, now))
+        INSERT OR REPLACE INTO restore_tasks (task_id, target_type, target_id, backup_id, status, progress, current_step, started_at, updated_at)
+        VALUES (?, ?, ?, ?, 'running', 0, 'Initiating restore...', ?, ?)
+    """, (task_id, target_type, target_id, backup_id, now, now))
     conn.commit()
     conn.close()
     return True
@@ -940,17 +958,22 @@ def create_restore_task(task_id: str, target_type: str, target_id: str, backup_i
 def update_restore_task(task_id: str, **kwargs) -> bool:
     """Update progress, status, or details of an active restore task."""
     conn = _get_conn()
-    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message']
+    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message', 'updated_at']
     updates = []
     params = []
     for k, v in kwargs.items():
         if k in allowed:
             updates.append(f"{k} = ?")
             params.append(v)
-            
+
+    now = int(time.time())
+    if 'updated_at' not in kwargs:
+        updates.append("updated_at = ?")
+        params.append(now)
+
     if kwargs.get('status') in ['success', 'failed'] and 'completed_at' not in kwargs:
         updates.append("completed_at = ?")
-        params.append(int(time.time()))
+        params.append(now)
         
     if not updates:
         conn.close()
@@ -963,17 +986,18 @@ def update_restore_task(task_id: str, **kwargs) -> bool:
     conn.close()
     return True
 
-def cleanup_stale_restore_tasks(timeout_seconds: int = 300) -> int:
-    """Marks any restore tasks in 'running' state longer than timeout as failed."""
+def cleanup_stale_restore_tasks(timeout_seconds: int = 900) -> int:
+    """Marks any restore tasks in 'running' state without recent progress as failed."""
     now = int(time.time())
     stale_threshold = now - timeout_seconds
     conn = _get_conn()
     cursor = conn.execute("""
         UPDATE restore_tasks
         SET status = 'failed',
-            error_message = 'Restore task timed out or was interrupted.',
+            error_message = 'Restore task timed out due to inactivity.',
             completed_at = ?
-        WHERE status = 'running' AND started_at < ?
+        WHERE status = 'running' 
+          AND (CASE WHEN updated_at > 0 THEN updated_at ELSE started_at END) < ?
     """, (now, stale_threshold))
     conn.commit()
     count = cursor.rowcount

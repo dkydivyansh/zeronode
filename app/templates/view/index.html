@@ -3,7 +3,13 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, maximum-scale=5.0" name="viewport"/>
+<meta name="theme-color" content="#0e0e0e"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="ZeroNode"/>
+<link rel="manifest" href="/manifest.json"/>
 <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"/>
 <title>ZERONODE // BY DKYDIVYANSH.COM</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
 <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
@@ -456,4 +462,5 @@
         }
     }, 3200);
 </script>
+<script src="{{ url_for('static', filename='js/pwa-updater.js') }}"></script>
 </body></html>

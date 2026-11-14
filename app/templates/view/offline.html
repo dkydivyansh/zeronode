@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta name="theme-color" content="#0e0e0e"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+    <meta name="apple-mobile-web-app-title" content="ZeroNode"/>
+    <link rel="manifest" href="/manifest.json"/>
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}"/>
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"/>
+    <title>ZeroNode - Offline Mode</title>
+    <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
+    <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}"/>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#c1c7cf",
+              "surface": "#0e0e0e",
+              "surface-container": "#191919",
+              "surface-container-high": "#1f1f1f",
+              "outline-variant": "#484848",
+              "error": "#ee7d77",
+              "tertiary": "#19ff6b"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"],
+              "mono": ["monospace"]
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body { background-color: #000; color: #e5e5e5; }
+      .scanline {
+          background: linear-gradient(to bottom, transparent 50%, rgba(255, 255, 255, 0.02) 50%);
+          background-size: 100% 4px;
+      }
+    </style>
+</head>
+<body class="font-body min-h-screen flex flex-col justify-between p-6 md:p-12 relative select-none">
+    <div class="fixed inset-0 z-0 pointer-events-none opacity-25 scanline"></div>
+
+    <!-- Top Header -->
+    <header class="relative z-10 flex justify-between items-center border-b border-outline-variant/30 pb-4">
+        <div class="flex items-center gap-3">
+            <span class="font-headline text-lg tracking-[0.25em] text-[#e5e5e5] uppercase">ZERONODE</span>
+            <span class="font-mono text-[10px] tracking-widest text-primary/50 border border-primary/20 px-2 py-0.5">OFFLINE MODE</span>
+        </div>
+        <div id="connection-badge" class="flex items-center gap-2 font-mono text-[11px] text-error tracking-wider uppercase">
+            <span class="inline-block w-2 h-2 rounded-full bg-error animate-pulse"></span>
+            <span id="connection-status-text">OFFLINE</span>
+        </div>
+    </header>
+
+    <!-- Center Card -->
+    <main class="relative z-10 max-w-xl mx-auto my-auto w-full bg-surface border border-outline-variant/40 p-8 md:p-12 shadow-2xl">
+        <div class="space-y-6">
+            <div class="space-y-2">
+                <span class="font-mono text-[10px] tracking-[0.3em] text-error uppercase">NO INTERNET CONNECTION</span>
+                <h1 class="font-headline text-2xl md:text-3xl tracking-wider text-[#e5e5e5] uppercase">CONNECTION LOST</h1>
+            </div>
+
+            <p class="font-label text-xs md:text-sm text-[#a0a0a0] leading-relaxed uppercase tracking-wider">
+                The ZeroNode server is currently unreachable. Pre-cached interface assets remain available locally, but live file transfers and account synchronization require an active network connection.
+            </p>
+
+            <div class="p-4 bg-surface-container border border-outline-variant/30 font-mono text-[11px] text-primary/80 space-y-1">
+                <div>[STATUS] Working in offline cache mode</div>
+                <div>[CACHE] Application assets verified</div>
+                <div>[ACTION] Reconnect to resume synchronization</div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 pt-4">
+                <button onclick="window.location.reload();" class="flex-1 bg-primary text-black font-label text-xs tracking-widest py-3 uppercase hover:bg-white transition-all text-center font-bold">
+                    RETRY CONNECTION
+                </button>
+                <a href="/app/home" class="flex-1 border border-outline-variant/60 text-primary font-label text-xs tracking-widest py-3 uppercase hover:border-primary hover:text-white transition-all text-center">
+                    DASHBOARD
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="relative z-10 flex justify-between items-center border-t border-outline-variant/30 pt-4 font-label text-[10px] text-primary/40 tracking-widest uppercase">
+        <span>ZERONODE SECURE STORAGE</span>
+        <span id="timestamp-clock"></span>
+    </footer>
+
+    <script>
+        // Update live clock
+        const clockEl = document.getElementById('timestamp-clock');
+        const updateClock = () => {
+            if (clockEl) clockEl.textContent = new Date().toUTCString().toUpperCase();
+        };
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Auto-reconnect when connection is restored
+        window.addEventListener('online', () => {
+            const badge = document.getElementById('connection-badge');
+            const text = document.getElementById('connection-status-text');
+            if (badge && text) {
+                badge.className = 'flex items-center gap-2 font-mono text-[11px] text-tertiary tracking-wider uppercase';
+                text.textContent = 'Connection restored. Reconnecting...';
+            }
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+

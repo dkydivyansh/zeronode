@@ -15,7 +15,19 @@
         </div>
         
         <!-- Controls -->
-        <div class="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto justify-start md:justify-end">
+        <div class="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto justify-start md:justify-end">
+            <button id="drive-upload-btn" class="flex items-center gap-1.5 px-3 py-1.5 border border-primary/50 bg-primary/10 hover:bg-primary/20 text-primary transition-all interactive-el font-label text-xs uppercase tracking-wider" title="Upload Files to Drive">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span>UPLOAD FILE</span>
+            </button>
+            <button id="drive-upload-folder-btn" class="flex items-center gap-1.5 px-3 py-1.5 border border-primary/40 bg-surface-container hover:bg-primary/15 hover:border-primary text-on-surface-variant/90 hover:text-primary transition-all interactive-el font-label text-xs uppercase tracking-wider" title="Upload Folder to Drive">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v6m-3-3l3-3 3 3"></path></svg>
+                <span>UPLOAD FOLDER</span>
+            </button>
+            <button id="drive-bulk-mode-btn" class="flex items-center gap-1.5 px-3 py-1.5 border border-outline-variant/40 hover:border-primary text-on-surface-variant/80 hover:text-primary transition-all interactive-el font-label text-xs uppercase tracking-wider" title="Toggle Bulk Edit / Selection Mode">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                <span id="bulk-mode-btn-text">BULK EDIT</span>
+            </button>
             <button id="drive-bulk-preview" class="p-2 text-on-surface-variant/40 hover:text-primary transition-all interactive-el" title="Load All Previews">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
             </button>
@@ -59,19 +71,42 @@
             </div>
         </div>
     </div>
+
+    <!-- Floating Bulk Action Bar (Positioned safely above bottom footer) -->
+    <div id="drive-bulk-bar" class="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 z-[80] hidden items-center gap-2 sm:gap-4 bg-[#141414]/95 border border-primary/50 px-3 sm:px-6 py-2.5 sm:py-3 shadow-2xl backdrop-blur-md transition-all duration-300 transform translate-y-8 opacity-0 max-w-[95vw] w-auto">
+        <div class="flex items-center gap-2 sm:gap-3 border-r border-outline-variant/30 pr-2 sm:pr-4">
+            <span id="bulk-selected-count" class="font-headline text-xs md:text-sm tracking-widest text-primary uppercase whitespace-nowrap">0 SELECTED</span>
+            <button id="bulk-select-all-toggle" class="font-mono text-[10px] text-on-surface-variant/70 hover:text-primary transition-colors underline uppercase whitespace-nowrap interactive-el">SELECT ALL</button>
+        </div>
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <button id="bulk-move-btn" class="flex items-center gap-1.5 px-3 py-2 bg-surface-variant hover:bg-primary/20 border border-outline-variant/40 hover:border-primary/50 text-on-surface font-label text-xs uppercase tracking-wider transition-all interactive-el" title="Move Selected Items">
+                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                <span>Move</span>
+            </button>
+            <button id="bulk-delete-btn" class="flex items-center gap-1.5 px-3 py-2 bg-error/10 hover:bg-error/20 border border-error/30 text-error font-label text-xs uppercase tracking-wider transition-all interactive-el" title="Delete Selected Items">
+                <svg class="w-4 h-4 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>Delete</span>
+            </button>
+            <button id="bulk-clear-btn" class="p-2 text-on-surface-variant/50 hover:text-on-surface transition-colors ml-1 interactive-el" title="Clear selection">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
 </div>
 
-<!-- Hidden File Input for Upload -->
+<!-- Hidden File and Folder Inputs for Upload -->
 <input type="file" id="hidden-file-input" multiple class="hidden" />
+<input type="file" id="hidden-folder-input" webkitdirectory directory multiple class="hidden" />
 
 <!-- Context Menu Modal -->
 <div id="context-menu" class="fixed inset-0 bg-black/80 z-[120] hidden items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-surface-container-high border border-outline-variant/30 shadow-2xl flex flex-col w-[90vw] md:w-[400px] max-w-full" id="context-menu-box">
         <div class="px-6 py-5 border-b border-outline-variant/20 mb-1 flex flex-col gap-1 bg-surface-container-highest">
-            <span class="font-mono text-[9px] text-primary uppercase tracking-widest opacity-60">SELECTED FILE</span>
+            <span class="font-mono text-[9px] text-primary uppercase tracking-widest opacity-60">SELECTED ITEM</span>
             <span id="ctx-header" class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase truncate block">item.pdf</span>
         </div>
         <div class="py-2 flex flex-col gap-1 px-2">
+            <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="select" id="ctx-select">Select / Deselect</button>
             <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="download" id="ctx-download">Download & Decrypt</button>
             <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="rename">Rename</button>
             <button class="ctx-btn text-left px-6 py-4 hover:bg-surface-variant text-sm font-label tracking-wider uppercase text-on-surface transition-colors w-full interactive-el" data-action="move">Move To...</button>
@@ -124,7 +159,7 @@
     </div>
 
     <!-- Preview Surface -->
-    <div id="pv-surface" class="flex-1 relative flex items-center justify-center overflow-hidden p-12">
+    <div id="pv-surface" class="flex-1 relative flex items-center justify-center overflow-hidden p-4 md:p-12">
         <div id="pv-loader" class="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
             <div class="vault-spinner mb-4"></div>
             <span class="font-mono text-[10px] tracking-widest text-primary">DECRYPTING PREVIEW...</span>
@@ -163,7 +198,7 @@
 <div id="modal-move-item" class="fixed inset-0 bg-black/80 z-[110] hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-surface-container-high border border-outline-variant/30 p-4 md:p-6 w-[90vw] md:w-[400px] max-w-full flex flex-col gap-4 shadow-2xl transition-all transform scale-95 opacity-0" id="move-modal-box">
         <div class="flex justify-between items-center mb-1 gap-2">
-            <h2 class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase">MOVE ITEM</h2>
+            <h2 id="move-modal-title" class="font-headline text-lg tracking-widest text-[#e5e5e5] uppercase">MOVE ITEM</h2>
             <span id="move-item-name" class="font-mono text-[9px] text-primary uppercase tracking-tighter truncate w-full md:max-w-[150px] text-right">filename.ext</span>
         </div>
 
@@ -188,15 +223,25 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block dynamic_menu %}
-<button id="dynamic-new-folder" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2">
-    <span>+ NEW FOLDER</span>
+<button id="dynamic-bulk-btn" class="vault-btn w-full sm:!w-auto !px-2.5 sm:!px-3 lg:!px-3.5 !py-1 sm:!py-1.5 flex items-center justify-center gap-1.5 sm:gap-2 border border-outline-variant/40 hover:border-primary text-[10px] sm:text-[11px] lg:text-xs whitespace-nowrap shrink-0 transition-all font-label tracking-wider interactive-el" title="Toggle Bulk Edit Mode">
+    <svg class="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+    <span id="dynamic-bulk-text" class="whitespace-nowrap">BULK EDIT</span>
 </button>
-<button id="dynamic-upload" class="vault-btn !w-auto !px-4 !py-1.5 flex items-center gap-2">
-    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-    <span>UPLOAD</span>
+<button id="dynamic-new-folder" class="vault-btn w-full sm:!w-auto !px-2.5 sm:!px-3 lg:!px-3.5 !py-1 sm:!py-1.5 flex items-center justify-center gap-1.5 sm:gap-2 border border-outline-variant/30 hover:border-primary text-[10px] sm:text-[11px] lg:text-xs whitespace-nowrap shrink-0 transition-all font-label tracking-wider interactive-el" title="Create New Folder">
+    <svg class="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+    <span class="whitespace-nowrap">NEW FOLDER</span>
+</button>
+<button id="dynamic-upload" class="vault-btn w-full sm:!w-auto !px-2.5 sm:!px-3 lg:!px-3.5 !py-1 sm:!py-1.5 flex items-center justify-center gap-1.5 sm:gap-2 border border-outline-variant/30 hover:border-primary text-[10px] sm:text-[11px] lg:text-xs whitespace-nowrap shrink-0 transition-all font-label tracking-wider interactive-el" title="Upload Files to Drive">
+    <svg class="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+    <span class="whitespace-nowrap">UPLOAD FILE</span>
+</button>
+<button id="dynamic-upload-folder" class="vault-btn w-full sm:!w-auto !px-2.5 sm:!px-3 lg:!px-3.5 !py-1 sm:!py-1.5 flex items-center justify-center gap-1.5 sm:gap-2 border border-outline-variant/30 hover:border-primary text-[10px] sm:text-[11px] lg:text-xs whitespace-nowrap shrink-0 transition-all font-label tracking-wider interactive-el" title="Upload Folder to Drive">
+    <svg class="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11v6m-3-3l3-3 3 3"></path></svg>
+    <span class="whitespace-nowrap">UPLOAD FOLDER</span>
 </button>
 {% endblock %}
 

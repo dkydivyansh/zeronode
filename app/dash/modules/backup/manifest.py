@@ -18,6 +18,7 @@ class Manifest(ModuleManifest):
         "/api/user/restore",
         "/api/user/restore_upload",
         "/api/user/restore_task_status",
+        "/api/user/task_status",
     ]
 
     def get_view(self, module_name: str, **kwargs):
@@ -66,11 +67,28 @@ class Manifest(ModuleManifest):
             is_admin = db_handler.is_admin(email)
             if not cfg.get('enabled') and not is_admin:
                 return jsonify({"error": "Backups are not enabled for this account. Contact your administrator."}), 403
+
+            active_restore = db_handler.get_active_restore_task('user', user_id) or db_handler.get_any_active_restore_task()
+            if active_restore:
+                return jsonify({
+                    "status": "restore_running",
+                    "error": "A restore operation is currently in progress. Backup cannot be started.",
+                    "task_id": active_restore['task_id']
+                }), 409
+
             active = db_handler.get_active_backup_task('user', user_id)
             if active:
-                return jsonify({"status": "already_running", "task_id": active['task_id']}), 200
-            task_id = backup_manager.trigger_backup_async('user', user_id)
-            return jsonify({"status": "started", "task_id": task_id}), 202
+                return jsonify({
+                    "status": "already_running",
+                    "error": "A backup is already running for your account.",
+                    "task_id": active['task_id']
+                }), 409
+
+            try:
+                task_id = backup_manager.trigger_backup_async('user', user_id)
+                return jsonify({"status": "started", "task_id": task_id}), 202
+            except RuntimeError as re:
+                return jsonify({"status": "conflict", "error": str(re)}), 409
 
         # User Download Latest Backup
         if path == "/api/user/download":
@@ -112,6 +130,22 @@ class Manifest(ModuleManifest):
             if confirmation != "RESTORE DATA":
                 return jsonify({"error": "Confirmation phrase did not match. Please type 'RESTORE DATA' to authorize."}), 400
 
+            active_restore = db_handler.get_active_restore_task('user', user_id) or db_handler.get_any_active_restore_task()
+            if active_restore:
+                return jsonify({
+                    "status": "already_running",
+                    "error": "A restore operation is already in progress.",
+                    "task_id": active_restore['task_id']
+                }), 409
+
+            active_backup = db_handler.get_active_backup_task('user', user_id)
+            if active_backup:
+                return jsonify({
+                    "status": "backup_running",
+                    "error": "A backup is currently in progress. Please wait for it to finish before restoring.",
+                    "task_id": active_backup['task_id']
+                }), 409
+
             backup_id = data.get('backup_id')
             try:
                 if not backup_id:
@@ -122,6 +156,8 @@ class Manifest(ModuleManifest):
 
                 task_id = backup_manager.trigger_restore_async('user', user_id, backup_id=backup_id)
                 return jsonify({"status": "started", "task_id": task_id}), 202
+            except RuntimeError as re:
+                return jsonify({"status": "conflict", "error": str(re)}), 409
             except Exception as e:
                 return jsonify({"error": str(e)}), 400
 
@@ -133,6 +169,22 @@ class Manifest(ModuleManifest):
                 return jsonify({"error": "Confirmation phrase did not match. Please type 'RESTORE DATA' to authorize."}), 400
             if not file or not file.filename:
                 return jsonify({"error": "No backup archive file selected."}), 400
+
+            active_restore = db_handler.get_active_restore_task('user', user_id) or db_handler.get_any_active_restore_task()
+            if active_restore:
+                return jsonify({
+                    "status": "already_running",
+                    "error": "A restore operation is already in progress.",
+                    "task_id": active_restore['task_id']
+                }), 409
+
+            active_backup = db_handler.get_active_backup_task('user', user_id)
+            if active_backup:
+                return jsonify({
+                    "status": "backup_running",
+                    "error": "A backup is currently in progress. Please wait for it to finish before restoring.",
+                    "task_id": active_backup['task_id']
+                }), 409
             
             temp_fd, temp_path = tempfile.mkstemp(prefix="znode_upload_restore_", suffix=".zip.bin")
             os.close(temp_fd)
@@ -140,6 +192,11 @@ class Manifest(ModuleManifest):
                 file.save(temp_path)
                 task_id = backup_manager.trigger_restore_async('user', user_id, archive_file_path=temp_path)
                 return jsonify({"status": "started", "task_id": task_id}), 202
+            except RuntimeError as re:
+                if os.path.exists(temp_path):
+                    try: os.remove(temp_path)
+                    except OSError: pass
+                return jsonify({"status": "conflict", "error": str(re)}), 409
             except Exception as e:
                 if os.path.exists(temp_path):
                     try: os.remove(temp_path)
@@ -154,6 +211,15 @@ class Manifest(ModuleManifest):
             else:
                 task = db_handler.get_restore_task(task_id)
             return jsonify({"task": task}), 200
+
+        # User Backup Task Status (Polling fallback for WebSocket)
+        if path == "/api/user/task_status":
+            task_id = request.args.get('task_id')
+            if not task_id:
+                task = db_handler.get_active_backup_task('user', user_id)
+            else:
+                task = db_handler.get_backup_task(task_id)
+            return jsonify({"success": True, "task": task}), 200
 
         # Render Main Backup View
         is_admin = db_handler.is_admin(email)

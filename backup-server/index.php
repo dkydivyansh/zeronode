@@ -13,6 +13,7 @@ $routes = [
     '/api/list'     => __DIR__ . '/api/list.php',
     '/api/download' => __DIR__ . '/api/download.php',
     '/api/delete'   => __DIR__ . '/api/delete.php',
+    '/api/abort'    => __DIR__ . '/api/abort.php',
     '/api/health'   => __DIR__ . '/api/health.php',
 ];
 

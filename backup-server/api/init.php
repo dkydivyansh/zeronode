@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../db.php';
 authenticate_request();
+cleanup_expired_sessions();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_error("Method Not Allowed. POST required.", 405);

@@ -54,7 +54,7 @@ class DriveCrypto {
     const pubB64 = sessionStorage.getItem("vault_pub");
 
     if (!privKey || !pubB64) {
-      throw new Error("Vault not unlocked in session.");
+      throw new Error("Session not unlocked.");
     }
 
     const pubBuf = base64ToBuffer(pubB64);
@@ -458,8 +458,208 @@ let currentView = "grid"; // 'grid' | 'list'
 let activeCtxItem = null;
 let activePreviewItem = null;
 
+// --- Bulk Selection State & Actions ---
+let isBulkMode = false;
+const selectedItems = new Map(); // id -> { id, type, name }
+
+function updateBulkUI() {
+  const count = selectedItems.size;
+  const bar = document.getElementById("drive-bulk-bar");
+  const countLabel = document.getElementById("bulk-selected-count");
+  const selectAllBtn = document.getElementById("drive-select-all-btn");
+  const toggleSelectAll = document.getElementById("bulk-select-all-toggle");
+  const bulkModeBtn = document.getElementById("drive-bulk-mode-btn");
+  const bulkModeText = document.getElementById("bulk-mode-btn-text");
+  const dynamicBulkBtn = document.getElementById("dynamic-bulk-btn");
+  const dynamicBulkText = document.getElementById("dynamic-bulk-text");
+
+  if (countLabel) {
+    countLabel.innerText = count > 0 ? `${count} SELECTED` : (isBulkMode ? "SELECT ITEMS" : "0 SELECTED");
+  }
+
+  // Update button texts
+  const labelText = isBulkMode ? "EXIT SELECT" : "BULK EDIT";
+  if (bulkModeText) bulkModeText.innerText = labelText;
+  if (dynamicBulkText) dynamicBulkText.innerText = labelText;
+
+  // Toggle active styling on toolbar & dynamic buttons
+  if (bulkModeBtn) {
+    if (isBulkMode) {
+      bulkModeBtn.classList.add("border-primary", "bg-primary/20", "text-primary");
+      bulkModeBtn.classList.remove("border-outline-variant/40", "text-on-surface-variant/80");
+    } else {
+      bulkModeBtn.classList.remove("border-primary", "bg-primary/20", "text-primary");
+      bulkModeBtn.classList.add("border-outline-variant/40", "text-on-surface-variant/80");
+    }
+  }
+  if (dynamicBulkBtn) {
+    if (isBulkMode) {
+      dynamicBulkBtn.classList.add("border-primary", "bg-primary/20", "text-primary");
+      dynamicBulkBtn.classList.remove("border-outline-variant/40");
+    } else {
+      dynamicBulkBtn.classList.remove("border-primary", "bg-primary/20", "text-primary");
+      dynamicBulkBtn.classList.add("border-outline-variant/40");
+    }
+  }
+
+  if (bar) {
+    if (count > 0 || isBulkMode) {
+      bar.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        bar.classList.remove("translate-y-8", "translate-y-12", "opacity-0");
+        bar.classList.add("flex", "translate-y-0", "opacity-100");
+      });
+    } else {
+      bar.classList.remove("translate-y-0", "opacity-100");
+      bar.classList.add("translate-y-8", "opacity-0");
+      setTimeout(() => {
+        if (selectedItems.size === 0 && !isBulkMode) {
+          bar.classList.add("hidden");
+          bar.classList.remove("flex");
+        }
+      }, 250);
+    }
+  }
+
+  const allCards = document.querySelectorAll(".drive-item");
+  allCards.forEach((card) => {
+    const id = card.dataset.id;
+    const isSelected = selectedItems.has(id);
+    const chk = card.querySelector(".drive-item-checkbox");
+    if (chk) {
+      chk.checked = isSelected;
+      if (isSelected || isBulkMode) {
+        chk.classList.remove("opacity-0", "opacity-30");
+        chk.classList.add("opacity-100");
+      } else {
+        chk.classList.remove("opacity-100");
+        if (currentView === "grid") {
+          chk.classList.remove("opacity-30");
+          chk.classList.add("opacity-0");
+        } else {
+          chk.classList.remove("opacity-0");
+          chk.classList.add("opacity-30");
+        }
+      }
+    }
+
+    if (isSelected) {
+      card.classList.add("ring-2", "ring-primary", "bg-primary/10", "border-primary/60");
+    } else {
+      card.classList.remove("ring-2", "ring-primary", "bg-primary/10", "border-primary/60");
+    }
+  });
+
+  if (toggleSelectAll && allCards.length > 0) {
+    toggleSelectAll.innerText = count === allCards.length ? "DESELECT ALL" : "SELECT ALL";
+  }
+
+  if (selectAllBtn) {
+    if (count > 0 && count === allCards.length) {
+      selectAllBtn.classList.add("text-primary");
+      selectAllBtn.classList.remove("text-on-surface-variant/40");
+    } else {
+      selectAllBtn.classList.remove("text-primary");
+      selectAllBtn.classList.add("text-on-surface-variant/40");
+    }
+  }
+}
+
+function clearSelection() {
+  selectedItems.clear();
+  isBulkMode = false;
+  updateBulkUI();
+}
+
+function toggleSelectItem(id, type, name, forceState = null) {
+  const shouldSelect = forceState !== null ? forceState : !selectedItems.has(id);
+  if (shouldSelect) {
+    selectedItems.set(id, { id, type, name });
+  } else {
+    selectedItems.delete(id);
+  }
+  updateBulkUI();
+}
+
+function selectAllVisible() {
+  const allCards = document.querySelectorAll(".drive-item");
+  if (allCards.length === 0) return;
+  const allSelected = selectedItems.size === allCards.length;
+
+  if (allSelected) {
+    selectedItems.clear();
+  } else {
+    allCards.forEach((card) => {
+      const id = card.dataset.id;
+      const type = card.dataset.type;
+      const name = card.dataset.name;
+      selectedItems.set(id, { id, type, name });
+    });
+  }
+  updateBulkUI();
+}
+
+function getMimeType(fileName) {
+  const ext = (fileName || "").split(".").pop().toLowerCase();
+  const map = {
+    // Audio
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    oga: "audio/ogg",
+    opus: "audio/opus",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+    weba: "audio/webm",
+    wma: "audio/x-ms-wma",
+    mid: "audio/midi",
+    midi: "audio/midi",
+
+    // Video
+    mp4: "video/mp4",
+    webm: "video/webm",
+    ogv: "video/ogg",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    mkv: "video/x-matroska",
+    avi: "video/x-msvideo",
+    "3gp": "video/3gpp",
+    ts: "video/mp2t",
+
+    // Images
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    ico: "image/x-icon",
+    bmp: "image/bmp",
+    avif: "image/avif",
+    apng: "image/apng",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+
+    // Documents & Code
+    pdf: "application/pdf",
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    csv: "text/csv",
+    xml: "application/xml",
+    html: "text/html",
+    css: "text/css",
+    js: "text/javascript",
+    ts: "text/typescript",
+    py: "text/x-python",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
 async function fetchDrive(folderId = null) {
   currentFolderId = folderId;
+  clearSelection();
 
   // 1. Immediate Visual Feedback
   const container = document.getElementById("item-container");
@@ -711,7 +911,7 @@ function initMarkdownEditor(uuid, fileName, content) {
               </div>
           </div>
           <div class="flex-1 flex overflow-hidden relative">
-              <div id="md-formatted" contenteditable="true" class="flex-1 bg-surface p-16 md:px-24 lg:px-48 overflow-y-auto focus:outline-none leading-relaxed transition-all duration-300 selection:bg-primary/30 prose prose-invert max-w-none scroll-smooth h-full" spellcheck="true" placeholder="Vault Note Content..."></div>
+              <div id="md-formatted" contenteditable="true" class="flex-1 bg-surface p-16 md:px-24 lg:px-48 overflow-y-auto focus:outline-none leading-relaxed transition-all duration-300 selection:bg-primary/30 prose prose-invert max-w-none scroll-smooth h-full" spellcheck="true" placeholder="Note content..."></div>
               <textarea id="md-raw" class="flex-1 bg-[#020202] text-on-surface font-mono text-[11px] p-16 md:p-24 resize-none focus:outline-none focus:ring-0 leading-loose overflow-y-auto hidden selection:bg-primary/30 h-full border-l border-outline-variant/10"></textarea>
           </div>
       </div>
@@ -978,17 +1178,17 @@ function getFileIcon(name, type, sizeClass = "w-8 h-8") {
   const commonClasses = `${sizeClass} text-on-surface-variant/80 mb-2`;
 
   // Icon Mapping
-  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext)) {
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "avif", "apng", "tif", "tiff"].includes(ext)) {
     // Image Icon
-    return `<svg class="${commonClasses}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`;
+    return `<svg class="${commonClasses} text-primary/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`;
   }
-  if (["mp4", "webm", "mov", "avi", "mkv"].includes(ext)) {
+  if (["mp4", "webm", "mov", "avi", "mkv", "ogv", "ogg", "m4v", "3gp", "ts"].includes(ext)) {
     // Video Icon
-    return `<svg class="${commonClasses}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
+    return `<svg class="${commonClasses} text-primary/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
   }
-  if (["mp3", "wav", "flac", "m4a", "ogg"].includes(ext)) {
+  if (["mp3", "wav", "flac", "m4a", "ogg", "oga", "opus", "aac", "weba", "wma", "mid", "midi"].includes(ext)) {
     // Audio Icon
-    return `<svg class="${commonClasses}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>`;
+    return `<svg class="${commonClasses} text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>`;
   }
   if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(ext)) {
     // Archive Icon
@@ -1033,21 +1233,25 @@ function getFileIcon(name, type, sizeClass = "w-8 h-8") {
 
 function renderItem(item) {
   const isFolder = item.type === "folder";
+  const itemId = isFolder ? item.id : item.uuid || item.id;
+  const itemName = item.name || item.file_name;
+  const isSelected = selectedItems.has(itemId);
+
   const iconGrid = getFileIcon(
-    item.name || item.file_name,
+    itemName,
     item.type,
     "w-8 h-8",
   );
   const iconList = getFileIcon(
-    item.name || item.file_name,
+    itemName,
     item.type,
     "w-5 h-5",
   );
 
   const sizeStr = isFolder ? `${item.size} items` : formatSize(item.size);
-  const hasPreview = previewUrls.has(item.uuid || item.id);
+  const hasPreview = previewUrls.has(itemId);
   const previewStyle = hasPreview
-    ? `style="background-image: url('${previewUrls.get(item.uuid || item.id)}'); background-size: cover; background-position: center;"`
+    ? `style="background-image: url('${previewUrls.get(itemId)}'); background-size: cover; background-position: center;"`
     : "";
 
   if (currentView === "grid") {
@@ -1056,29 +1260,48 @@ function renderItem(item) {
       ? `<div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors z-0"></div>`
       : "";
 
+    const selectedClasses = isSelected
+      ? "ring-2 ring-primary bg-primary/10 border-primary/60"
+      : "border-outline-variant/20 bg-surface-container-high hover:bg-surface-variant";
+
+    const chkOpacity = (isSelected || isBulkMode) ? "opacity-100" : "opacity-30 md:opacity-0 group-hover:opacity-100";
+
     return `
-        <div class="col-span-1 min-h-[160px] border border-outline-variant/20 bg-surface-container-high hover:bg-surface-variant transition-colors p-4 flex flex-col items-center justify-center cursor-pointer interactive-el group relative drive-item overflow-hidden" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}" ${previewStyle}>
-            <button class="ctx-btn absolute top-2 right-2 p-1 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary bg-surface-container-highest/80 rounded backdrop-blur-sm">
+        <div class="col-span-1 min-h-[160px] border ${selectedClasses} transition-all p-4 flex flex-col items-center justify-center cursor-pointer interactive-el group relative drive-item overflow-hidden" data-id="${itemId}" data-type="${item.type}" data-name="${itemName}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}" ${previewStyle}>
+            <!-- Checkbox -->
+            <div class="drive-checkbox-wrapper absolute top-2 left-2 z-20" onclick="event.stopPropagation()">
+                <input type="checkbox" class="drive-item-checkbox w-4 h-4 rounded border-outline-variant/40 bg-surface-container-highest/90 accent-primary cursor-pointer transition-all ${chkOpacity}" ${isSelected ? 'checked' : ''} data-id="${itemId}" data-type="${item.type}" data-name="${itemName}" />
+            </div>
+
+            <button class="ctx-btn absolute top-2 right-2 p-1 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary bg-surface-container-highest/80 rounded backdrop-blur-sm" onclick="event.stopPropagation()">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
             </button>
             ${bgLayer}
-            <div class="relative z-10 flex flex-col items-center justify-center w-full">
+            <div class="relative z-10 flex flex-col items-center justify-center w-full pointer-events-none">
                 ${iconHtml}
-                <span class="font-label text-xs tracking-wider text-on-surface w-full text-center truncate group-hover:text-primary transition-colors ${hasPreview ? "drop-shadow-lg" : ""}">${getNameWithoutMD(item.name || item.file_name)}</span>
+                <span class="font-label text-xs tracking-wider text-on-surface w-full text-center truncate group-hover:text-primary transition-colors ${hasPreview ? "drop-shadow-lg" : ""}">${getNameWithoutMD(itemName)}</span>
                 <span class="font-mono text-[9px] text-on-surface-variant/40 mt-1 ${hasPreview ? "text-white/70" : ""}">${sizeStr}</span>
             </div>
         </div>`;
   }
 
+  const listSelectedClasses = isSelected
+    ? "bg-primary/10 border-primary/50"
+    : "hover:bg-surface-variant";
+
   return `
-    <div class="col-span-full border-b border-outline-variant/10 hover:bg-surface-variant transition-colors py-2 px-4 flex items-center justify-between cursor-pointer interactive-el drive-item relative group" data-id="${isFolder ? item.id : item.uuid || item.id}" data-type="${item.type}" data-name="${item.name || item.file_name}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}">
+    <div class="col-span-full border-b border-outline-variant/10 ${listSelectedClasses} transition-all py-2 px-4 flex items-center justify-between cursor-pointer interactive-el drive-item relative group" data-id="${itemId}" data-type="${item.type}" data-name="${itemName}" data-size="${item.size}" data-size-str="${sizeStr}" data-modified-str="${new Date(item.modified).toLocaleDateString()}">
         <div class="flex items-center gap-3 w-[60%] md:w-1/2">
+            <!-- Checkbox -->
+            <div class="drive-checkbox-wrapper shrink-0 flex items-center mr-2" onclick="event.stopPropagation()">
+                <input type="checkbox" class="drive-item-checkbox w-4 h-4 rounded border-outline-variant/40 bg-surface-container-highest/90 accent-primary cursor-pointer transition-all ${(isSelected || isBulkMode) ? 'opacity-100' : 'opacity-30 group-hover:opacity-100'}" ${isSelected ? 'checked' : ''} data-id="${itemId}" data-type="${item.type}" data-name="${itemName}" />
+            </div>
             ${iconList}
-            <span class="font-label text-sm tracking-wide text-on-surface truncate pr-2">${getNameWithoutMD(item.name || item.file_name)}</span>
+            <span class="font-label text-sm tracking-wide text-on-surface truncate pr-2">${getNameWithoutMD(itemName)}</span>
         </div>
         <div class="hidden md:block font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${sizeStr}</div>
         <div class="hidden md:block font-mono text-[10px] text-on-surface-variant/40 w-1/4 text-right">${new Date(item.modified).toLocaleDateString()}</div>
-        <button class="ctx-btn md:absolute right-4 p-2 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary">
+        <button class="ctx-btn md:absolute right-4 p-2 md:opacity-0 group-hover:opacity-100 transition-opacity z-20 text-on-surface-variant hover:text-primary" onclick="event.stopPropagation()">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
         </button>
     </div>`;
@@ -1101,10 +1324,23 @@ function renderDrive(contents) {
 
   if (folders.length === 0 && files.length === 0) {
     container.innerHTML = `<div class="col-span-full text-center py-20 font-mono text-xs text-on-surface-variant/30 uppercase tracking-widest">Directory is Empty</div>`;
+    updateBulkUI();
     return;
   }
 
   container.innerHTML = [...folders, ...files].map(renderItem).join("");
+
+  // Attach change listeners to checkboxes
+  container.querySelectorAll(".drive-item-checkbox").forEach((chk) => {
+    chk.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const id = chk.dataset.id;
+      const type = chk.dataset.type;
+      const name = chk.dataset.name;
+      if (chk.checked) isBulkMode = true;
+      toggleSelectItem(id, type, name, chk.checked);
+    });
+  });
 
   document.querySelectorAll(".drive-item").forEach((el) => {
     const ctxBtn = el.querySelector(".ctx-btn");
@@ -1122,7 +1358,14 @@ function renderDrive(contents) {
       });
     }
 
-    el.addEventListener("click", () => {
+    el.addEventListener("click", (e) => {
+      // If in bulk selection mode or clicked with Ctrl/Cmd or Shift key, toggle selection
+      if (isBulkMode || e.ctrlKey || e.metaKey || e.shiftKey) {
+        e.preventDefault();
+        toggleSelectItem(el.dataset.id, el.dataset.type, el.dataset.name);
+        return;
+      }
+
       if (el.dataset.type === "folder") fetchDrive(el.dataset.id);
       else openLightbox(el.dataset);
     });
@@ -1131,16 +1374,22 @@ function renderDrive(contents) {
       showContextMenu(e.pageX, e.pageY, el.dataset);
     });
   });
+
+  updateBulkUI();
 }
 
 function showContextMenu(x, y, dataset) {
   const ctxMenu = document.getElementById("context-menu");
   const ctxHeader = document.getElementById("ctx-header");
   const ctxDl = document.getElementById("ctx-download");
+  const ctxSelect = document.getElementById("ctx-select");
   if (!ctxMenu) return;
   activeCtxItem = dataset;
   if (ctxHeader) ctxHeader.innerText = dataset.name;
   if (ctxDl) ctxDl.style.display = dataset.type === "folder" ? "none" : "block";
+  if (ctxSelect) {
+    ctxSelect.innerText = selectedItems.has(dataset.id) ? "DESELECT ITEM" : "SELECT ITEM";
+  }
   ctxMenu.classList.remove("hidden");
   ctxMenu.classList.add("flex");
 }
@@ -1194,33 +1443,54 @@ function openLightbox(dataset) {
   setTimeout(() => previewModal.classList.add("opacity-100"), 10);
 
   const ext = dataset.name.split(".").pop().toLowerCase();
-  const isMedia = [
-    "jpg",
-    "jpeg",
-    "png",
-    "gif",
-    "webp",
-    "mp4",
-    "webm",
-    "mp3",
-    "wav",
-    "pdf",
-    "txt",
-    "md",
-    "js",
-    "py",
-    "css",
-    "html",
+  const isImage = [
+    "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "avif", "apng", "tif", "tiff"
   ].includes(ext);
-  const isSmall = parseInt(dataset.size || 0) < 100 * 1024 * 1024;
+  const isVideo = [
+    "mp4", "webm", "ogg", "ogv", "mov", "m4v", "mkv", "avi", "3gp", "ts"
+  ].includes(ext);
+  const isAudio = [
+    "mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "wma", "mid", "midi"
+  ].includes(ext);
+  const isText = [
+    "txt", "md", "js", "ts", "py", "css", "html", "json", "sql", "log", "rtf", "c", "cpp", "java", "php", "sh", "xml", "yaml", "yml", "ini", "conf", "env"
+  ].includes(ext);
+  const isPdf = ext === "pdf";
+
+  const isMedia = isImage || isVideo || isAudio || isText || isPdf;
+  const sizeNum = parseInt(dataset.size || 0);
+  const isSmall = sizeNum < 250 * 1024 * 1024;
+
+  if (pvType) {
+    let typeDesc = ext.toUpperCase();
+    if (isImage) typeDesc = `${ext.toUpperCase()} IMAGE`;
+    else if (isVideo) typeDesc = `${ext.toUpperCase()} VIDEO`;
+    else if (isAudio) typeDesc = `${ext.toUpperCase()} AUDIO`;
+    else if (isPdf) typeDesc = "PDF DOCUMENT";
+    else if (ext === "md") typeDesc = "MARKDOWN NOTE";
+    pvType.innerText = typeDesc;
+  }
 
   const footer = document.getElementById("pv-footer");
   if (footer) footer.style.display = ext === "md" ? "none" : "flex";
 
   if (pvPreviewBtn) {
     pvPreviewBtn.style.display = isMedia && isSmall ? "flex" : "none";
-    if (ext === "md") {
-      setTimeout(() => pvPreviewBtn.click(), 100);
+
+    const shouldAutoLoad =
+      ext === "md" ||
+      isImage ||
+      isAudio ||
+      (isVideo && sizeNum < 150 * 1024 * 1024) ||
+      (isText && sizeNum < 5 * 1024 * 1024) ||
+      (isPdf && sizeNum < 25 * 1024 * 1024);
+
+    if (shouldAutoLoad) {
+      setTimeout(() => {
+        if (activePreviewItem && activePreviewItem.id === dataset.id) {
+          pvPreviewBtn.click();
+        }
+      }, 50);
     }
   }
 
@@ -1240,6 +1510,17 @@ function openLightbox(dataset) {
 function closeLightbox() {
   const previewModal = document.getElementById("drive-preview-modal");
   if (!previewModal) return;
+
+  // Immediately pause and unload any media elements
+  const mediaElements = previewModal.querySelectorAll("video, audio");
+  mediaElements.forEach((m) => {
+    try {
+      m.pause();
+      m.currentTime = 0;
+      m.src = "";
+      m.load();
+    } catch (e) {}
+  });
 
   // Restore any hidden lightbox chrome (in case MD editor hid them)
   const pvTopBar = previewModal.querySelector(':scope > div:first-child');
@@ -1332,7 +1613,7 @@ function initDriveControls() {
         fetchDrive(currentFolderId);
       } catch (e) {
         console.error(e);
-        showZNodeToast("FAILED TO CREATE ENCRYPTED FOLDER", "error");
+        showZNodeToast("Failed to create folder", "error");
       } finally {
         createBtn.disabled = false;
         if (loader) loader.classList.add("hidden");
@@ -1363,6 +1644,107 @@ function initDriveControls() {
       });
     };
   }
+
+  // Bulk Selection & Action Controls
+  const toggleBulkMode = () => {
+    isBulkMode = !isBulkMode;
+    if (!isBulkMode) {
+      clearSelection();
+    } else {
+      updateBulkUI();
+    }
+  };
+
+  const bulkModeBtn = document.getElementById("drive-bulk-mode-btn");
+  if (bulkModeBtn) {
+    bulkModeBtn.onclick = toggleBulkMode;
+  }
+
+  const dynamicBulkBtn = document.getElementById("dynamic-bulk-btn");
+  if (dynamicBulkBtn) {
+    dynamicBulkBtn.onclick = toggleBulkMode;
+  }
+
+  const selectAllBtn = document.getElementById("drive-select-all-btn");
+  if (selectAllBtn) {
+    selectAllBtn.onclick = () => selectAllVisible();
+  }
+
+  const bulkSelectAllToggle = document.getElementById("bulk-select-all-toggle");
+  if (bulkSelectAllToggle) {
+    bulkSelectAllToggle.onclick = () => selectAllVisible();
+  }
+
+  const bulkClearBtn = document.getElementById("bulk-clear-btn");
+  if (bulkClearBtn) {
+    bulkClearBtn.onclick = () => clearSelection();
+  }
+
+  const bulkMoveBtn = document.getElementById("bulk-move-btn");
+  if (bulkMoveBtn) {
+    bulkMoveBtn.onclick = () => {
+      if (selectedItems.size === 0) return;
+      openMoveModal(Array.from(selectedItems.values()));
+    };
+  }
+
+  const bulkDeleteBtn = document.getElementById("bulk-delete-btn");
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.onclick = async () => {
+      if (selectedItems.size === 0) return;
+      const items = Array.from(selectedItems.values());
+      const foldersCount = items.filter((i) => i.type === "folder").length;
+      const filesCount = items.filter((i) => i.type === "file").length;
+
+      let details = [];
+      if (foldersCount > 0) details.push(`${foldersCount} folder${foldersCount > 1 ? "s" : ""}`);
+      if (filesCount > 0) details.push(`${filesCount} file${filesCount > 1 ? "s" : ""}`);
+
+      const confirmed = await ZNodeDialog.confirm(
+        "BULK DELETE",
+        `Are you sure you want to permanently delete ${items.length} selected item${items.length > 1 ? "s" : ""} (${details.join(", ")})? All nested files and data will be permanently deleted. This action cannot be undone.`,
+      );
+
+      if (confirmed) {
+        const file_ids = items.filter((i) => i.type === "file").map((i) => i.id);
+        const folder_ids = items.filter((i) => i.type === "folder").map((i) => i.id);
+
+        try {
+          const res = await fetch("/app/api/drive/bulk/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file_ids, folder_ids }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Bulk delete failed");
+
+          showZNodeToast(
+            `Permanently deleted ${items.length} items`,
+            "info",
+          );
+          clearSelection();
+          fetchDrive(currentFolderId);
+        } catch (err) {
+          showZNodeToast(`Delete failed: ${err.message}`, "error");
+        }
+      }
+    };
+  }
+
+  // Multi-selection keyboard shortcuts (Esc = clear, Del = bulk delete)
+  window.addEventListener("keydown", (e) => {
+    if (selectedItems.size === 0) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (["INPUT", "TEXTAREA"].includes(tag) || (document.activeElement && document.activeElement.isContentEditable)) {
+      return;
+    }
+
+    if (e.key === "Escape") {
+      clearSelection();
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      if (bulkDeleteBtn) bulkDeleteBtn.click();
+    }
+  });
 
   // Search
   let searchTimeout;
@@ -1463,12 +1845,17 @@ function initDriveControls() {
 
     canvas.addEventListener(
       "drop",
-      (e) => {
+      async (e) => {
         overlay.classList.add("hidden");
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-          for (let i = 0; i < files.length; i++) {
-            processUploadQueue(files[i]);
+        const { files, emptyDirs } = await extractFilesFromDataTransfer(e.dataTransfer);
+        if (files.length > 0 || emptyDirs.length > 0) {
+          const hasFolders = emptyDirs.length > 0 || files.some((f) => (f.webkitRelativePath || f._relPath || "").includes("/"));
+          if (hasFolders) {
+            processFolderUpload(files, emptyDirs);
+          } else {
+            for (let i = 0; i < files.length; i++) {
+              processUploadQueue(files[i]);
+            }
           }
         }
       },
@@ -1494,9 +1881,10 @@ function initDriveControls() {
   if (cb) cb.onclick = closeLightbox;
 
   // Context Actions
-  document.querySelectorAll(".ctx-btn").forEach((btn) => {
+  document.querySelectorAll("#context-menu .ctx-btn").forEach((btn) => {
     btn.onclick = async () => {
       const action = btn.dataset.action;
+      if (!action || !activeCtxItem) return;
       const id = activeCtxItem.id;
       const type = activeCtxItem.type;
       const menu = document.getElementById("context-menu");
@@ -1505,7 +1893,9 @@ function initDriveControls() {
         menu.classList.add("hidden");
       }
 
-      if (action === "delete") {
+      if (action === "select") {
+        toggleSelectItem(id, type, activeCtxItem.name);
+      } else if (action === "delete") {
         if (
           await ZNodeDialog.confirm(
             "DELETE",
@@ -1559,6 +1949,9 @@ function initDriveControls() {
         downloadFile(id, activeCtxItem.name);
       } else if (action === "move") {
         moveItem(id, type, activeCtxItem.name);
+      } else if (action === "select") {
+        isBulkMode = true;
+        toggleSelectItem(id, type, activeCtxItem.name);
       }
     };
   });
@@ -1631,18 +2024,93 @@ function initDriveControls() {
         if (!blob || blob.size === 0) {
           throw new Error("The decrypted file is empty or corrupted.");
         }
-        const url = URL.createObjectURL(blob);
+        readyToSaveBlob = blob;
+        const mime = getMimeType(activePreviewItem.name);
+        const playBlob = blob.type && blob.type !== "application/octet-stream"
+          ? blob
+          : new Blob([blob], { type: mime });
+        const url = URL.createObjectURL(playBlob);
         const ext = activePreviewItem.name.split(".").pop().toLowerCase();
         let el;
-        if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
+
+        if (
+          ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "avif", "apng", "tif", "tiff"].includes(ext)
+        ) {
           el = document.createElement("img");
           el.src = url;
-          el.className = "max-w-full max-h-full object-contain shadow-2xl";
-        } else if (["mp4", "webm"].includes(ext)) {
-          el = document.createElement("video");
-          el.src = url;
-          el.controls = true;
-          el.className = "max-w-full max-h-full shadow-2xl";
+          el.alt = activePreviewItem.name;
+          el.className = "max-w-full max-h-[75vh] object-contain shadow-2xl rounded border border-outline-variant/20";
+        } else if (
+          ["mp4", "webm", "ogg", "ogv", "mov", "m4v", "mkv", "avi", "3gp", "ts"].includes(ext)
+        ) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "flex flex-col items-center justify-center max-w-5xl w-full max-h-full";
+          wrapper.innerHTML = `
+            <div class="relative w-full flex items-center justify-center bg-black/60 rounded overflow-hidden">
+              <video controls playsinline preload="auto" class="max-w-full max-h-[72vh] rounded border border-outline-variant/30 shadow-2xl bg-black object-contain focus:outline-none w-full">
+                  <source src="${url}" type="${mime}">
+                  Your browser does not support native playback for this video format.
+              </video>
+            </div>
+            <div class="mt-3 flex items-center justify-between w-full max-w-full px-2">
+                <span class="font-mono text-[10px] text-on-surface-variant/60 uppercase tracking-widest truncate max-w-[70%]">${activePreviewItem.name}</span>
+                <span class="font-mono text-[10px] text-primary uppercase tracking-widest px-2 py-0.5 bg-primary/10 border border-primary/20 rounded">${ext.toUpperCase()} VIDEO</span>
+            </div>
+          `;
+          const vid = wrapper.querySelector("video");
+          if (vid) {
+            vid.src = url;
+            try {
+              vid.load();
+            } catch (e) {}
+            vid.addEventListener("error", () => {
+              const notice = document.createElement("div");
+              notice.className = "mt-3 p-3 bg-error/10 border border-error/30 text-error font-mono text-[10px] text-center uppercase tracking-wider rounded w-full";
+              notice.innerText = "Notice: This video format or codec cannot be decoded natively by your browser. Use 'Save To Disk' to play in VLC or another media player.";
+              wrapper.appendChild(notice);
+            });
+          }
+          el = wrapper;
+        } else if (
+          ["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "wma", "mid", "midi"].includes(ext)
+        ) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "flex flex-col items-center justify-center p-6 md:p-10 max-w-lg w-full bg-surface-container-high/90 border border-outline-variant/30 shadow-2xl backdrop-blur-md rounded";
+          wrapper.innerHTML = `
+            <div class="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-tr from-surface-container-highest to-surface-variant border-2 border-primary/40 flex items-center justify-center mb-6 shadow-inner relative group overflow-hidden">
+                <div class="absolute inset-0 bg-primary/10 rounded-full animate-ping opacity-25"></div>
+                <svg class="w-14 h-14 md:w-16 md:h-16 text-primary relative z-10 transition-transform group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+            </div>
+            <div class="text-center w-full mb-6 px-4">
+                <h3 class="font-headline text-base md:text-lg tracking-wider text-on-surface uppercase truncate w-full" title="${activePreviewItem.name}">${activePreviewItem.name}</h3>
+                <div class="flex items-center justify-center gap-3 mt-2 font-mono text-[10px] text-on-surface-variant/60 uppercase tracking-widest">
+                    <span class="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded">${ext.toUpperCase()} AUDIO</span>
+                    <span>${activePreviewItem.sizeStr || formatSize(blob.size)}</span>
+                </div>
+            </div>
+            <div class="w-full">
+                <audio controls class="w-full h-11 focus:outline-none accent-primary rounded" preload="auto">
+                    <source src="${url}" type="${mime}">
+                    Your browser does not support audio playback.
+                </audio>
+            </div>
+          `;
+          const aud = wrapper.querySelector("audio");
+          if (aud) {
+            aud.src = url;
+            try {
+              aud.load();
+            } catch (e) {}
+            aud.addEventListener("error", () => {
+              const notice = document.createElement("div");
+              notice.className = "mt-3 p-3 bg-error/10 border border-error/30 text-error font-mono text-[10px] text-center uppercase tracking-wider rounded w-full";
+              notice.innerText = "Notice: This audio format cannot be decoded natively by your browser. Use 'Save To Disk' to play locally.";
+              wrapper.appendChild(notice);
+            });
+          }
+          el = wrapper;
         } else if (["pdf"].includes(ext)) {
           // Custom but secure container with zoom controls
           const wrapper = document.createElement("div");
@@ -1772,10 +2240,30 @@ function initDriveControls() {
   }
 
   // Uploads
+  const triggerUpload = () => {
+    const upInput = document.getElementById("hidden-file-input");
+    if (upInput) upInput.click();
+  };
+
+  const triggerFolderUpload = () => {
+    const folderInput = document.getElementById("hidden-folder-input");
+    if (folderInput) folderInput.click();
+  };
+
   const upBtn = document.getElementById("dynamic-upload");
+  if (upBtn) upBtn.onclick = triggerUpload;
+
+  const headerUpBtn = document.getElementById("drive-upload-btn");
+  if (headerUpBtn) headerUpBtn.onclick = triggerUpload;
+
+  const folderUpBtn = document.getElementById("dynamic-upload-folder");
+  if (folderUpBtn) folderUpBtn.onclick = triggerFolderUpload;
+
+  const headerFolderUpBtn = document.getElementById("drive-upload-folder-btn");
+  if (headerFolderUpBtn) headerFolderUpBtn.onclick = triggerFolderUpload;
+
   const upInput = document.getElementById("hidden-file-input");
-  if (upBtn && upInput) {
-    upBtn.onclick = () => upInput.click();
+  if (upInput) {
     upInput.onchange = (e) => {
       for (let i = 0; i < e.target.files.length; i++) {
         processUploadQueue(e.target.files[i]);
@@ -1783,11 +2271,205 @@ function initDriveControls() {
       e.target.value = "";
     };
   }
+
+  const folderInput = document.getElementById("hidden-folder-input");
+  if (folderInput) {
+    folderInput.onchange = (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        processFolderUpload(e.target.files);
+      }
+      e.target.value = "";
+    };
+  }
 }
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+// --- Folder Operations & Hierarchy Ingestion ---
+async function createZeroNodeFolder(name, parentId = null) {
+  const res = await fetch("/app/api/drive/folder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name, parent_id: parentId || null }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Failed creating folder '${name}'`);
+  return data.id;
+}
+
+async function extractFilesFromDataTransfer(dataTransfer) {
+  const items = dataTransfer.items;
+  const files = [];
+  const emptyDirs = [];
+
+  if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+    const queue = [];
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry();
+      if (entry) queue.push(entry);
+    }
+
+    async function traverseEntry(entry, path = "") {
+      if (entry.isFile) {
+        return new Promise((resolve) => {
+          entry.file(
+            (file) => {
+              file._relPath = path ? `${path}/${file.name}` : file.name;
+              files.push(file);
+              resolve();
+            },
+            () => resolve()
+          );
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const dirPath = path ? `${path}/${entry.name}` : entry.name;
+        let entryCount = 0;
+
+        const readAllEntries = async () => {
+          return new Promise((resolve) => {
+            dirReader.readEntries(
+              async (entries) => {
+                if (!entries || entries.length === 0) {
+                  resolve();
+                } else {
+                  entryCount += entries.length;
+                  for (const subEntry of entries) {
+                    await traverseEntry(subEntry, dirPath);
+                  }
+                  await readAllEntries();
+                  resolve();
+                }
+              },
+              () => resolve()
+            );
+          });
+        };
+        await readAllEntries();
+        if (entryCount === 0) {
+          emptyDirs.push(dirPath);
+        }
+      }
+    }
+
+    for (const entry of queue) {
+      await traverseEntry(entry);
+    }
+
+    return { files, emptyDirs };
+  }
+
+  if (dataTransfer.files && dataTransfer.files.length > 0) {
+    return { files: Array.from(dataTransfer.files), emptyDirs: [] };
+  }
+  return { files: [], emptyDirs: [] };
+}
+
+async function processFolderUpload(fileList, emptyDirs = []) {
+  const files = fileList ? Array.from(fileList) : [];
+  if (files.length === 0 && emptyDirs.length === 0) return;
+
+  const rootDestId = currentFolderId || null;
+  const folderCache = new Map(); // relativePath -> serverFolderId
+
+  showZNodeToast(`Uploading folder structure (${files.length} file${files.length === 1 ? '' : 's'})...`, "info");
+
+  // Pre-seed folderCache with existing folders under current view to allow smooth merging
+  try {
+    const listRes = await fetch(`/app/api/drive/list${rootDestId ? '/' + rootDestId : ''}`);
+    if (listRes.ok) {
+      const data = await listRes.json();
+      if (Array.isArray(data.folders)) {
+        for (const ef of data.folders) {
+          if (ef.name && ef.id) {
+            folderCache.set(ef.name, ef.id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Could not pre-fetch folders:", e);
+  }
+
+  let createdNewFolder = false;
+
+  // Process empty directory structures first if any
+  for (const emptyDir of emptyDirs) {
+    const parts = emptyDir.split("/").filter(Boolean);
+    let currentPathAcc = "";
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i];
+      currentPathAcc = currentPathAcc ? `${currentPathAcc}/${seg}` : seg;
+      if (!folderCache.has(currentPathAcc)) {
+        const parentId = (i === 0) ? rootDestId : folderCache.get(parts.slice(0, i).join("/"));
+        try {
+          const newId = await createZeroNodeFolder(seg, parentId);
+          folderCache.set(currentPathAcc, newId);
+          createdNewFolder = true;
+        } catch (err) {
+          console.error(`Failed to create empty folder ${seg}:`, err);
+        }
+      }
+    }
+  }
+
+  // Sort files so shallow directories are created before nested subdirectories
+  files.sort((a, b) => {
+    const pathA = a.webkitRelativePath || a._relPath || a.name || "";
+    const pathB = b.webkitRelativePath || b._relPath || b.name || "";
+    const depthA = (pathA.match(/\//g) || []).length;
+    const depthB = (pathB.match(/\//g) || []).length;
+    return depthA - depthB;
+  });
+
+  for (const file of files) {
+    const relPath = file.webkitRelativePath || file._relPath || file.name;
+    const parts = relPath.split("/").filter(Boolean);
+
+    let targetFolderId = rootDestId;
+
+    if (parts.length > 1) {
+      const dirParts = parts.slice(0, -1);
+      let currentPathAcc = "";
+
+      for (let i = 0; i < dirParts.length; i++) {
+        const seg = dirParts[i];
+        currentPathAcc = currentPathAcc ? `${currentPathAcc}/${seg}` : seg;
+
+        if (folderCache.has(currentPathAcc)) {
+          targetFolderId = folderCache.get(currentPathAcc);
+        } else {
+          const parentId = (i === 0) ? rootDestId : folderCache.get(dirParts.slice(0, i).join("/"));
+          try {
+            const newId = await createZeroNodeFolder(seg, parentId);
+            targetFolderId = newId;
+            folderCache.set(currentPathAcc, newId);
+            createdNewFolder = true;
+          } catch (err) {
+            console.error(`Failed to create folder ${seg}:`, err);
+          }
+        }
+      }
+    }
+
+    file._targetFolderId = targetFolderId;
+    processUploadQueue(file);
+  }
+
+  if (createdNewFolder && document.getElementById("item-container")) {
+    fetchDrive(currentFolderId);
+  }
+}
+
 
 async function decryptFolderMedia() {
   const items = document.querySelectorAll('.drive-item[data-type="file"]');
-  const mediaExts = ["jpg", "jpeg", "png", "gif", "webp"];
+  const mediaExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "apng"];
 
   for (const el of items) {
     const id = el.dataset.id;
@@ -1871,19 +2553,19 @@ async function processUploadQueue(file) {
   activeUploadCount++;
   try {
     promoteTransfer(nextFile._tfId, "ENCRYPT");
-    await uploadFile(nextFile, nextFile._tfId);
+    await uploadFile(nextFile, nextFile._tfId, nextFile._targetFolderId);
   } finally {
     activeUploadCount--;
     processUploadQueue(); // Try to start next in line
   }
 }
 
-async function uploadFile(file, tfId) {
+async function uploadFile(file, tfId, targetFolderId = null) {
   if (!file) return;
   if (file.size === 0 && !file.name.endsWith(".md")) {
     failTransfer(tfId);
     showZNodeToast(
-      `ABORTED: ${file.name} is an empty file (0 bytes).`,
+      `Cannot upload empty file: ${file.name}`,
       "error",
     );
     return;
@@ -1897,13 +2579,17 @@ async function uploadFile(file, tfId) {
     const fileKey = await DriveCrypto.generateFileKey();
     const wrappedKey64 = await DriveCrypto.wrapFileKey(fileKey, masterKey);
 
+    const destFolder = (file && file._targetFolderId !== undefined)
+      ? file._targetFolderId
+      : (targetFolderId !== null ? targetFolderId : (currentFolderId || null));
+
     const initRes = await fetchWithRetry(`${FILE_API}/init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         file_name: file.name,
         aes_key: wrappedKey64,
-        folder_id: currentFolderId || null,
+        folder_id: destFolder || null,
       }),
     });
     const { uuid } = await initRes.json();
@@ -1976,7 +2662,7 @@ async function uploadFile(file, tfId) {
 
     completeTransfer(tfId);
     showZNodeToast(`Uploaded: ${file.name}`, "info");
-    if (document.getElementById("item-container")) fetchDrive(currentFolderId);
+    if (!file._skipDriveRefresh && document.getElementById("item-container")) fetchDrive(currentFolderId);
     return uuid;
   } catch (err) {
     console.error(err);
@@ -2011,7 +2697,7 @@ async function downloadFile(uuid, name, returnBlob = false) {
         if (!r.ok)
           throw new Error(
             r.status === 404
-              ? "File missing from vault storage."
+              ? "File missing from storage."
               : "Metadata fetch failed.",
           );
         metadata = await r.json();
@@ -2084,7 +2770,7 @@ async function downloadFile(uuid, name, returnBlob = false) {
         );
       }
 
-      const finalMime = "application/octet-stream";
+      const finalMime = getMimeType(name);
       const finalBlob = new Blob(decryptedChunks, { type: finalMime });
 
       const CACHE_RAM_LIMIT = 10 * 1024 * 1024; // 10MB
@@ -2210,7 +2896,12 @@ async function downloadFileOPFSEngine(uuid, name, metadata, tfId, returnBlob) {
     if (returnBlob) {
       if (pvLoader) pvLoader.classList.add("opacity-0", "pointer-events-none");
       setTimeout(() => cleanupOPFS(uuid), OPFS_CLEANUP_DELAY);
-      return finalFile;
+      const mime = getMimeType(name);
+      // OPFS-backed File handles cause MEDIA_ERR_SRC_NOT_SUPPORTED in Chromium/WebKit media players
+      // because OPFS URLs do not support range seeks/demuxing.
+      // Convert to in-memory Blob so video/audio players can stream and seek natively.
+      const arrayBuf = await finalFile.arrayBuffer();
+      return new Blob([arrayBuf], { type: mime || finalFile.type });
     }
 
     // "Regular Download Trigger"
@@ -2366,9 +3057,21 @@ function saveBlobToDisk(blob, name) {
   URL.revokeObjectURL(url);
 }
 
-async function moveItem(id, type, name) {
+async function openMoveModal(items) {
+  let itemsList = [];
+  if (Array.isArray(items)) {
+    itemsList = items;
+  } else if (typeof items === "string") {
+    itemsList = [{ id: arguments[0], type: arguments[1], name: arguments[2] }];
+  } else if (items && items.id) {
+    itemsList = [items];
+  }
+
+  if (itemsList.length === 0) return;
+
   const modal = document.getElementById("modal-move-item");
   const box = document.getElementById("move-modal-box");
+  const modalTitle = document.getElementById("move-modal-title");
   const nameLabel = document.getElementById("move-item-name");
   const container = document.getElementById("move-folder-list");
   const breadcrumbs = document.getElementById("move-breadcrumbs");
@@ -2377,10 +3080,26 @@ async function moveItem(id, type, name) {
 
   if (!modal || !container) return;
 
+  const folderIdsToExclude = new Set(
+    itemsList.filter((i) => i.type === "folder").map((i) => i.id)
+  );
+
   let movePath = [{ id: null, name: "Root" }];
   let currentTargetId = null;
 
-  nameLabel.innerText = name;
+  if (itemsList.length === 1) {
+    if (modalTitle) modalTitle.innerText = "MOVE ITEM";
+    if (nameLabel) nameLabel.innerText = itemsList[0].name;
+  } else {
+    if (modalTitle) modalTitle.innerText = "MOVE SELECTED ITEMS";
+    const foldersCount = itemsList.filter((i) => i.type === "folder").length;
+    const filesCount = itemsList.filter((i) => i.type === "file").length;
+    let label = [];
+    if (foldersCount > 0) label.push(`${foldersCount} FOLDER${foldersCount > 1 ? "S" : ""}`);
+    if (filesCount > 0) label.push(`${filesCount} FILE${filesCount > 1 ? "S" : ""}`);
+    if (nameLabel) nameLabel.innerText = `${itemsList.length} ITEMS (${label.join(", ")})`;
+  }
+
   modal.classList.remove("hidden");
   setTimeout(() => box.classList.remove("scale-95", "opacity-0"), 10);
 
@@ -2395,8 +3114,8 @@ async function moveItem(id, type, name) {
       );
       const data = await res.json();
 
-      // We only care about folders that aren't the one we are currently moving
-      const folders = data.folders.filter((f) => f.id !== id);
+      // We only care about folders that aren't in the list of folders being moved
+      const folders = data.folders.filter((f) => !folderIdsToExclude.has(f.id));
 
       if (folders.length === 0) {
         container.innerHTML = `<div class="p-12 flex flex-col items-center justify-center opacity-40">
@@ -2454,30 +3173,34 @@ async function moveItem(id, type, name) {
   };
 
   const finalizeMove = async () => {
-    const endpoint =
-      type === "folder"
-        ? `/app/api/drive/folder/${id}`
-        : `/app/api/drive/file/${id}/move`;
-    const payload =
-      type === "folder"
-        ? { parent_id: currentTargetId }
-        : { folder_id: currentTargetId };
+    const file_ids = itemsList.filter((i) => i.type === "file").map((i) => i.id);
+    const folder_ids = itemsList.filter((i) => i.type === "folder").map((i) => i.id);
 
     moveBtn.disabled = true;
     moveBtn.innerText = "MOVING...";
 
     try {
-      const moveRes = await fetch(endpoint, {
-        method: "PATCH",
+      const moveRes = await fetch("/app/api/drive/bulk/move", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          file_ids: file_ids,
+          folder_ids: folder_ids,
+          target_folder_id: currentTargetId,
+        }),
       });
       const moveData = await moveRes.json();
       if (!moveRes.ok) throw new Error(moveData.error || "Move failed");
 
-      showZNodeToast(`Moved '${name}' successfully`, "info");
+      showZNodeToast(
+        itemsList.length === 1
+          ? `Moved '${itemsList[0].name}' successfully`
+          : `Moved ${itemsList.length} items successfully`,
+        "info",
+      );
       box.classList.add("scale-95", "opacity-0");
       setTimeout(() => modal.classList.add("hidden"), 300);
+      clearSelection();
       fetchDrive(currentFolderId);
     } catch (err) {
       showZNodeToast(err.message, "error");
@@ -2492,8 +3215,12 @@ async function moveItem(id, type, name) {
   loadMoveDir(null, "Root");
 }
 
-// --- 7. Boot ---
-document.addEventListener("DOMContentLoaded", () => {
+function moveItem(id, type, name) {
+  openMoveModal([{ id, type, name }]);
+}
+
+// --- 7. Boot & Global Delegated Actions ---
+function bootDrive() {
   initOPFSWorkspace();
   updateCacheCountUI();
   const tmHdr = document.getElementById("tm-header");
@@ -2519,4 +3246,30 @@ document.addEventListener("DOMContentLoaded", () => {
       e.returnValue = "";
     }
   });
+}
+
+// Resilient Bootstrapping (handles both regular load and cached/PWA/deferred DOM readiness)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootDrive);
+} else {
+  bootDrive();
+}
+
+// Global delegated click handler for File & Folder Upload triggers
+document.addEventListener("click", (e) => {
+  const folderUploadTrigger = e.target.closest("#drive-upload-folder-btn, #dynamic-upload-folder, .trigger-folder-upload-btn");
+  if (folderUploadTrigger) {
+    e.preventDefault();
+    const folderInput = document.getElementById("hidden-folder-input");
+    if (folderInput) folderInput.click();
+    return;
+  }
+
+  const uploadTrigger = e.target.closest("#drive-upload-btn, #dynamic-upload, .trigger-upload-btn");
+  if (uploadTrigger) {
+    e.preventDefault();
+    const upInput = document.getElementById("hidden-file-input");
+    if (upInput) upInput.click();
+    return;
+  }
 });

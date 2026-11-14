@@ -467,33 +467,183 @@ class UserDataManager:
             return res.rowcount > 0
 
     def delete_item(self, item_id: str, is_folder: bool) -> bool:
-        """Permanently deletes an item from disk and DB."""
+        """Permanently deletes an item from disk and DB (recursively for folders)."""
+        if is_folder:
+            res = self.bulk_delete(file_ids=[], folder_ids=[item_id])
+            return res.get("deleted_folders", 0) > 0
+        else:
+            res = self.bulk_delete(file_ids=[item_id], folder_ids=[])
+            return res.get("deleted_files", 0) > 0
+
+    def bulk_delete(self, file_ids: list, folder_ids: list) -> dict:
+        """Permanently deletes multiple files and folders recursively."""
+        clean_file_ids = list(set(str(f).strip() for f in file_ids if f and str(f).strip()))
+        clean_folder_ids = list(set(str(f).strip() for f in folder_ids if f and str(f).strip()))
+
+        all_file_uuids = set()
+        all_folder_ids = set()
+
         with self._get_conn() as conn:
-            if is_folder:
-                folder_rows = conn.execute("""
+            # 1. Resolve all folders recursively
+            if clean_folder_ids:
+                p = ','.join('?' for _ in clean_folder_ids)
+                folder_rows = conn.execute(f"""
                     WITH RECURSIVE
                         folder_tree AS (
-                            SELECT id FROM folders WHERE id = ? AND owner = ?
+                            SELECT id FROM folders WHERE id IN ({p}) AND owner = ?
                             UNION ALL
                             SELECT f.id FROM folders f
                             INNER JOIN folder_tree t ON f.parent_id = t.id
                         )
                     SELECT id FROM folder_tree;
-                """, (item_id, self.user_id)).fetchall()
-                if not folder_rows: return False
-                folder_ids = [r['id'] for r in folder_rows]
-                file_rows = conn.execute(f"SELECT uuid FROM files WHERE folder_id IN ({','.join('?' for _ in folder_ids)}) AND owner = ?", (*folder_ids, self.user_id)).fetchall()
-                for f in file_rows:
-                    f_path = os.path.join(self.user_dir, f"{f['uuid']}.bin")
-                    if os.path.exists(f_path): os.remove(f_path)
-                conn.execute("DELETE FROM folders WHERE id = ? AND owner = ?", (item_id, self.user_id))
-            else:
-                f_path = os.path.join(self.user_dir, f"{item_id}.bin")
-                if os.path.exists(f_path): os.remove(f_path)
-                conn.execute("DELETE FROM files WHERE uuid = ? AND owner = ?", (item_id, self.user_id))
+                """, (*clean_folder_ids, self.user_id)).fetchall()
+
+                all_folder_ids = {r['id'] for r in folder_rows}
+
+                # Find all files inside any of these folders
+                if all_folder_ids:
+                    f_list = list(all_folder_ids)
+                    chunk_size = 500
+                    for i in range(0, len(f_list), chunk_size):
+                        chunk = f_list[i:i + chunk_size]
+                        fp = ','.join('?' for _ in chunk)
+                        f_rows = conn.execute(
+                            f"SELECT uuid FROM files WHERE folder_id IN ({fp}) AND owner = ?",
+                            (*chunk, self.user_id)
+                        ).fetchall()
+                        for r in f_rows:
+                            all_file_uuids.add(r['uuid'])
+
+            # 2. Resolve explicit file_ids belonging to this user
+            if clean_file_ids:
+                chunk_size = 500
+                for i in range(0, len(clean_file_ids), chunk_size):
+                    chunk = clean_file_ids[i:i + chunk_size]
+                    p = ','.join('?' for _ in chunk)
+                    f_rows = conn.execute(
+                        f"SELECT uuid FROM files WHERE uuid IN ({p}) AND owner = ?",
+                        (*chunk, self.user_id)
+                    ).fetchall()
+                    for r in f_rows:
+                        all_file_uuids.add(r['uuid'])
+
+            # 3. Physically delete all resolved .bin chunk files
+            for f_uuid in all_file_uuids:
+                f_path = os.path.join(self.user_dir, f"{f_uuid}.bin")
+                if os.path.exists(f_path):
+                    try:
+                        os.remove(f_path)
+                    except OSError:
+                        pass
+
+            # 4. Remove rows from files table
+            if all_file_uuids:
+                uuid_list = list(all_file_uuids)
+                chunk_size = 500
+                for i in range(0, len(uuid_list), chunk_size):
+                    chunk = uuid_list[i:i + chunk_size]
+                    p = ','.join('?' for _ in chunk)
+                    conn.execute(
+                        f"DELETE FROM files WHERE uuid IN ({p}) AND owner = ?",
+                        (*chunk, self.user_id)
+                    )
+
+            # 5. Remove rows from folders table
+            if all_folder_ids:
+                f_list = list(all_folder_ids)
+                chunk_size = 500
+                for i in range(0, len(f_list), chunk_size):
+                    chunk = f_list[i:i + chunk_size]
+                    p = ','.join('?' for _ in chunk)
+                    conn.execute(
+                        f"DELETE FROM folders WHERE id IN ({p}) AND owner = ?",
+                        (*chunk, self.user_id)
+                    )
+
             conn.commit()
+
         self.invalidate_stats_cache()
-        return True
+        return {
+            "status": "deleted",
+            "deleted_files": len(all_file_uuids),
+            "deleted_folders": len(all_folder_ids)
+        }
+
+    def bulk_move(self, file_ids: list, folder_ids: list, target_folder_id: str = None) -> dict:
+        """Relocates multiple files and folders to a target folder (or root if None)."""
+        clean_file_ids = list(set(str(f).strip() for f in file_ids if f and str(f).strip()))
+        clean_folder_ids = list(set(str(f).strip() for f in folder_ids if f and str(f).strip()))
+
+        if target_folder_id:
+            target_folder_id = str(target_folder_id).strip()
+            if not target_folder_id or target_folder_id.lower() in ("null", "none", "root"):
+                target_folder_id = None
+
+        with self._get_conn() as conn:
+            if target_folder_id:
+                # Target must exist and belong to user
+                target = conn.execute(
+                    "SELECT id FROM folders WHERE id = ? AND owner = ?",
+                    (target_folder_id, self.user_id)
+                ).fetchone()
+                if not target:
+                    raise ValueError("Target folder not found.")
+
+                # Cannot move folder into itself
+                if target_folder_id in clean_folder_ids:
+                    raise ValueError("Cannot move a folder into itself.")
+
+                # Cannot move folder into one of its descendants
+                if clean_folder_ids:
+                    p = ','.join('?' for _ in clean_folder_ids)
+                    descendants = conn.execute(f"""
+                        WITH RECURSIVE tree AS (
+                            SELECT id FROM folders WHERE id IN ({p}) AND owner = ?
+                            UNION ALL
+                            SELECT f.id FROM folders f INNER JOIN tree t ON f.parent_id = t.id
+                        ) SELECT id FROM tree;
+                    """, (*clean_folder_ids, self.user_id)).fetchall()
+
+                    descendant_ids = {r['id'] for r in descendants}
+                    if target_folder_id in descendant_ids:
+                        raise ValueError("Cannot move a folder into one of its subfolders.")
+
+            now_ts = datetime.now(timezone.utc).isoformat()
+            moved_files = 0
+            moved_folders = 0
+
+            # Move files
+            if clean_file_ids:
+                chunk_size = 500
+                for i in range(0, len(clean_file_ids), chunk_size):
+                    chunk = clean_file_ids[i:i + chunk_size]
+                    p = ','.join('?' for _ in chunk)
+                    cur = conn.execute(
+                        f"UPDATE files SET folder_id = ?, last_modified = ? WHERE uuid IN ({p}) AND owner = ?",
+                        (target_folder_id, now_ts, *chunk, self.user_id)
+                    )
+                    moved_files += cur.rowcount
+
+            # Move folders
+            if clean_folder_ids:
+                chunk_size = 500
+                for i in range(0, len(clean_folder_ids), chunk_size):
+                    chunk = clean_folder_ids[i:i + chunk_size]
+                    p = ','.join('?' for _ in chunk)
+                    cur = conn.execute(
+                        f"UPDATE folders SET parent_id = ?, last_modified = ? WHERE id IN ({p}) AND owner = ?",
+                        (target_folder_id, now_ts, *chunk, self.user_id)
+                    )
+                    moved_folders += cur.rowcount
+
+            conn.commit()
+
+        return {
+            "status": "moved",
+            "moved_files": moved_files,
+            "moved_folders": moved_folders,
+            "target_folder_id": target_folder_id
+        }
 
     # ─── Raw Data Engine ──────────────────────────────────────────
     

@@ -115,6 +115,34 @@ function json_error(string $message, int $status = 400): void {
     ], $status);
 }
 
+function cleanup_expired_sessions(int $maxAgeSecs = 1800): int {
+    global $CHUNK_DIR, $UPLOAD_TIMEOUT_SECS;
+    $maxAge = !empty($UPLOAD_TIMEOUT_SECS) ? (int)$UPLOAD_TIMEOUT_SECS : $maxAgeSecs;
+    $cutoff = time() - $maxAge;
+
+    try {
+        $db = get_db();
+        $stmt = $db->prepare("SELECT session_id FROM upload_sessions WHERE status = 'uploading' AND created_at < :cutoff");
+        $stmt->execute([':cutoff' => $cutoff]);
+        $stale = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $cleaned = 0;
+        foreach ($stale as $sid) {
+            $parts = glob(sprintf("%s/%s_*.part", $CHUNK_DIR, $sid));
+            if ($parts) {
+                foreach ($parts as $p) {
+                    if (file_exists($p)) @unlink($p);
+                }
+            }
+            $db->prepare("UPDATE upload_sessions SET status = 'failed' WHERE session_id = :sid")->execute([':sid' => $sid]);
+            $cleaned++;
+        }
+        return $cleaned;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
 // Polyfill getallheaders if not running under Apache
 if (!function_exists('getallheaders')) {
     function getallheaders(): array {

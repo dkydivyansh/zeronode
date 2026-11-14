@@ -2,13 +2,13 @@
 {% block title %}BACKUP{% endblock %}
 
 {% block dynamic_menu %}
-<button onclick="ZNodeBackupModule.triggerUserBackup()" class="font-label text-[10px] text-primary interactive-el uppercase px-6 py-2.5 border border-primary/40 bg-primary/5 hover:bg-primary hover:text-black transition-all tracking-[0.2em] font-bold">
+<button id="dynamic-backup-now-btn" onclick="ZNodeBackupModule.triggerUserBackup()" class="font-label text-[10px] text-primary interactive-el uppercase px-6 py-2.5 border border-primary/40 bg-primary/5 hover:bg-primary hover:text-black transition-all tracking-[0.2em] font-bold disabled:opacity-40 disabled:cursor-not-allowed">
     BACKUP NOW
 </button>
 {% endblock %}
 
 {% block content %}
-<div class="px-8 pt-12 pb-24">
+<div class="px-4 md:px-8 pt-12 pb-24">
     <!-- Header -->
     <div class="mb-14 border-l-2 border-primary pl-8">
         <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-[0.1em] text-on-surface mb-2 uppercase">
@@ -108,10 +108,10 @@
                 <a id="btn-user-download-latest" href="/app/backup/api/user/download" class="px-5 py-2.5 border border-outline-variant/30 text-on-surface-variant/80 hover:text-primary hover:border-primary/40 font-label text-[10px] tracking-widest uppercase font-medium transition-all inline-block hidden">
                     Download Backup
                 </a>
-                <button id="btn-user-restore-latest" onclick="ZNodeBackupModule.promptUserRestore()" class="px-5 py-2.5 border border-amber-500/40 text-amber-400 hover:bg-amber-500 hover:text-black font-label text-[10px] tracking-widest uppercase font-bold transition-all inline-block hidden">
+                <button id="btn-user-restore-latest" onclick="ZNodeBackupModule.promptUserRestore()" class="px-5 py-2.5 border border-amber-500/40 text-amber-400 hover:bg-amber-500 hover:text-black font-label text-[10px] tracking-widest uppercase font-bold transition-all inline-block hidden disabled:opacity-40 disabled:cursor-not-allowed">
                     Restore Latest Backup
                 </button>
-                <label for="restore-file-input" class="px-4 py-2.5 border border-outline-variant/20 text-on-surface-variant/60 hover:text-on-surface hover:border-outline-variant/40 font-label text-[10px] tracking-widest uppercase cursor-pointer transition-all inline-block">
+                <label id="restore-file-label" for="restore-file-input" class="px-4 py-2.5 border border-outline-variant/20 text-on-surface-variant/60 hover:text-on-surface hover:border-outline-variant/40 font-label text-[10px] tracking-widest uppercase cursor-pointer transition-all inline-block">
                     Restore from File
                 </label>
                 <input type="file" id="restore-file-input" accept=".bin,.zip" class="hidden" onchange="ZNodeBackupModule.handleFileRestore(this)">
@@ -237,7 +237,7 @@
                     <button onclick="ZNodeBackupModule.saveServerBackupSchedule()" class="flex-1 py-2.5 bg-white/5 border border-outline-variant/20 text-on-surface hover:text-primary hover:border-primary/40 font-label text-[9px] tracking-widest uppercase transition-all">
                         Update Schedule
                     </button>
-                    <button id="btn-trigger-server-backup" onclick="ZNodeBackupModule.triggerServerBackupNow()" class="flex-1 py-2.5 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase font-bold transition-all">
+                    <button id="btn-trigger-server-backup" onclick="ZNodeBackupModule.triggerServerBackupNow()" class="flex-1 py-2.5 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                         Backup Server Now
                     </button>
                 </div>
@@ -349,6 +349,85 @@
 const ZNodeBackupModule = {
     isAdmin: {{ 'true' if is_admin else 'false' }},
     pollTimer: null,
+    isBusy: false,
+
+    updateActionButtons(isBusy, type, label) {
+        this.isBusy = Boolean(isBusy);
+
+        const btnUserBackup = document.getElementById('btn-user-backup-now');
+        const dynamicBackup = document.getElementById('dynamic-backup-now-btn');
+        const btnServerBackup = document.getElementById('btn-trigger-server-backup');
+        const btnUserRestore = document.getElementById('btn-user-restore-latest');
+        const fileRestoreLabel = document.getElementById('restore-file-label');
+        const fileRestoreInput = document.getElementById('restore-file-input');
+
+        if (btnUserBackup) {
+            btnUserBackup.disabled = isBusy;
+            btnUserBackup.textContent = isBusy 
+                ? (type === 'restore' ? 'RESTORE RUNNING...' : 'UPLOADING...') 
+                : 'Back Up Now';
+        }
+
+        if (dynamicBackup) {
+            dynamicBackup.disabled = isBusy;
+            if (isBusy) {
+                dynamicBackup.textContent = type === 'restore' ? 'RESTORE RUNNING' : 'UPLOADING...';
+                dynamicBackup.classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                dynamicBackup.textContent = 'BACKUP NOW';
+                dynamicBackup.classList.remove('opacity-40', 'cursor-not-allowed');
+            }
+        }
+
+        if (btnServerBackup) {
+            btnServerBackup.disabled = isBusy;
+            btnServerBackup.textContent = isBusy 
+                ? (type === 'restore' ? 'RESTORE RUNNING...' : 'BACKING UP...') 
+                : 'Backup Server Now';
+        }
+
+        if (btnUserRestore) {
+            btnUserRestore.disabled = isBusy;
+            if (isBusy) {
+                btnUserRestore.textContent = type === 'restore' ? 'RESTORING...' : 'BACKUP RUNNING...';
+                btnUserRestore.classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                btnUserRestore.textContent = 'Restore Latest Backup';
+                btnUserRestore.classList.remove('opacity-40', 'cursor-not-allowed');
+            }
+        }
+
+        if (fileRestoreLabel) {
+            if (isBusy) {
+                fileRestoreLabel.classList.add('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+            } else {
+                fileRestoreLabel.classList.remove('opacity-40', 'pointer-events-none', 'cursor-not-allowed');
+            }
+        }
+        if (fileRestoreInput) {
+            fileRestoreInput.disabled = isBusy;
+        }
+
+        document.querySelectorAll('.btn-remote-restore').forEach(b => {
+            b.disabled = isBusy;
+            if (isBusy) {
+                b.classList.add('opacity-40', 'cursor-not-allowed');
+                b.textContent = 'BUSY';
+            } else {
+                b.classList.remove('opacity-40', 'cursor-not-allowed');
+                b.textContent = 'RESTORE';
+            }
+        });
+
+        document.querySelectorAll('.btn-admin-user-backup').forEach(b => {
+            b.disabled = isBusy;
+            if (isBusy) {
+                b.classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                b.classList.remove('opacity-40', 'cursor-not-allowed');
+            }
+        });
+    },
 
     formatBytes(bytes) {
         if (!bytes || bytes <= 0) return '0 B';
@@ -382,39 +461,48 @@ const ZNodeBackupModule = {
             const sizeEl = document.getElementById('user-val-size');
             const hashBox = document.getElementById('user-hash-container');
             const hashEl = document.getElementById('user-val-hash');
-            const btnTrigger = document.getElementById('btn-user-backup-now');
             const btnDownload = document.getElementById('btn-user-download-latest');
 
-            const active = data.active_task && data.active_task.status === 'running' 
+            const activeBackup = (data.active_task && data.active_task.status === 'running') 
                 ? data.active_task 
                 : (this.isAdmin && data.global_active_task && data.global_active_task.status === 'running' ? data.global_active_task : null);
 
-            if (active) {
+            const activeRestore = (data.active_restore_task && data.active_restore_task.status === 'running')
+                ? data.active_restore_task
+                : (this.isAdmin && data.global_active_restore_task && data.global_active_restore_task.status === 'running' ? data.global_active_restore_task : null);
+
+            if (activeRestore) {
+                this.updateActionButtons(true, 'restore', activeRestore.current_step);
                 progressBox.classList.remove('hidden');
-                const targetLabel = active.target_type === 'server' ? 'System Server Data' : (active.target_id === data.user_id ? 'Your Account Drive' : `User (${active.target_id.slice(0, 8)}...)`);
-                targetEl.textContent = `Backing Up: ${targetLabel}`;
-                percentEl.textContent = `${active.progress}%`;
-                barEl.style.width = `${Math.min(100, Math.max(2, active.progress))}%`;
-                stepEl.textContent = active.current_step || 'Processing chunks...';
+                targetEl.textContent = `Restoring: ${activeRestore.target_type === 'server' ? 'Server Data' : 'Account Drive'}`;
+                percentEl.textContent = `${activeRestore.progress}%`;
+                barEl.style.width = `${Math.min(100, Math.max(2, activeRestore.progress))}%`;
+                stepEl.textContent = activeRestore.current_step || 'Restoring files...';
 
                 badgeEl.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-amber-500/40 text-amber-400 bg-amber-500/10 uppercase animate-pulse";
-                badgeEl.textContent = `UPLOADING (${active.progress}%)`;
+                badgeEl.textContent = `RESTORING (${activeRestore.progress}%)`;
+                this.scheduleNext(1500);
+                return;
+            }
 
-                if (btnTrigger) {
-                    btnTrigger.disabled = true;
-                    btnTrigger.textContent = 'UPLOADING...';
-                }
+            if (activeBackup) {
+                this.updateActionButtons(true, 'backup', activeBackup.current_step);
+                progressBox.classList.remove('hidden');
+                const targetLabel = activeBackup.target_type === 'server' ? 'System Server Data' : (activeBackup.target_id === data.user_id ? 'Your Account Drive' : `User (${activeBackup.target_id.slice(0, 8)}...)`);
+                targetEl.textContent = `Backing Up: ${targetLabel}`;
+                percentEl.textContent = `${activeBackup.progress}%`;
+                barEl.style.width = `${Math.min(100, Math.max(2, activeBackup.progress))}%`;
+                stepEl.textContent = activeBackup.current_step || 'Processing chunks...';
 
+                badgeEl.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-amber-500/40 text-amber-400 bg-amber-500/10 uppercase animate-pulse";
+                badgeEl.textContent = `UPLOADING (${activeBackup.progress}%)`;
                 this.scheduleNext(2000);
                 return;
             }
 
-            // Non-uploading idle state
+            // Idle state
+            this.updateActionButtons(false);
             progressBox.classList.add('hidden');
-            if (btnTrigger) {
-                btnTrigger.disabled = false;
-                btnTrigger.textContent = 'Back Up Now';
-            }
 
             intervalEl.textContent = data.enabled ? (data.interval || 'daily').toUpperCase() : 'DISABLED';
             timeEl.textContent = this.formatDate(data.last_backup_at);
@@ -477,39 +565,42 @@ const ZNodeBackupModule = {
     },
 
     async triggerUserBackup() {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            return;
+        }
         const btn = document.getElementById('btn-user-backup-now');
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'INITIALIZING...';
         }
         try {
-            if (window.ZNodeBackupLive) {
-                window.ZNodeBackupLive.startBackupModal('user', "Your Account Drive");
-            }
             const res = await fetch('/app/backup/api/user/trigger', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
             const data = await res.json();
-            if (res.ok) {
-                if (window.ZNodeBackupLive && data.task_id) {
-                    window.ZNodeBackupLive.setTaskId(data.task_id);
+            if (res.ok && data.task_id) {
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.startBackupModal('user', "Your Account Drive", data.task_id);
                 }
+                this.fetchUserStatus();
             } else {
-                await ZNodeDialog.alert("BACKUP FAILED", data.error || "Failed to trigger user backup.");
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "BACKUP FAILED", data.error || "Failed to trigger user backup.");
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = 'Back Up Now';
                 }
+                this.fetchUserStatus();
                 return;
             }
-            this.fetchUserStatus();
         } catch (e) {
             await ZNodeDialog.alert("CONNECTION ERROR", "Failed to communicate with the backup manager.");
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = 'Back Up Now';
             }
+            this.fetchUserStatus();
         }
     },
 
@@ -551,12 +642,19 @@ const ZNodeBackupModule = {
             }
 
             const recentTasks = data.recent_tasks || [];
-            const runningTask = recentTasks.find(t => t.status === 'running');
+            const runningTask = recentTasks.find(t => t.status === 'running') || data.active_backup;
+            const activeRestore = data.active_restore;
             const serverTaskBox = document.getElementById('server-task-progress-box');
             const serverTaskStep = document.getElementById('server-task-step');
             const serverTaskPct = document.getElementById('server-task-pct');
             const serverTaskBar = document.getElementById('server-task-bar');
             const btnTriggerServer = document.getElementById('btn-trigger-server-backup');
+
+            if (activeRestore) {
+                this.updateActionButtons(true, 'restore', activeRestore.current_step);
+            } else if (runningTask) {
+                this.updateActionButtons(true, 'backup', runningTask.current_step);
+            }
 
             if (runningTask && runningTask.target_type === 'server') {
                 serverTaskBox.classList.remove('hidden');
@@ -570,8 +668,8 @@ const ZNodeBackupModule = {
             } else {
                 serverTaskBox.classList.add('hidden');
                 if (btnTriggerServer) {
-                    btnTriggerServer.disabled = false;
-                    btnTriggerServer.textContent = 'Backup Server Now';
+                    btnTriggerServer.disabled = this.isBusy;
+                    btnTriggerServer.textContent = this.isBusy ? 'BUSY...' : 'Backup Server Now';
                 }
             }
 
@@ -582,7 +680,8 @@ const ZNodeBackupModule = {
                     tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-on-surface-variant/30 uppercase tracking-[0.3em]">No user accounts registered.</td></tr>';
                 } else {
                     tbody.innerHTML = userConfigs.map(u => {
-                        const isRunning = runningTask && runningTask.target_type === 'user' && runningTask.target_id === u.user_id;
+                        const isRunningThis = runningTask && runningTask.target_type === 'user' && runningTask.target_id === u.user_id;
+                        const isBlocked = isRunningThis || this.isBusy;
                         const statusClass = u.last_status === 'success' ? 'text-emerald-400' : (u.last_status === 'failed' ? 'text-error' : 'text-on-surface-variant/50');
                         return `
                             <tr class="border-t border-outline-variant/10 hover:bg-white/5 transition-all group">
@@ -625,9 +724,9 @@ const ZNodeBackupModule = {
                                 </td>
                                 <td class="px-6 py-4 text-right">
                                     <button onclick="ZNodeBackupModule.triggerUserBackupByAdmin('${u.user_id}', '${u.email}')" 
-                                            ${isRunning ? 'disabled' : ''}
-                                            class="font-label text-[9px] tracking-wider text-primary border border-primary/30 px-3 py-1.5 hover:bg-primary hover:text-black transition-all uppercase font-bold disabled:opacity-40">
-                                        ${isRunning ? `BACKING UP (${runningTask.progress}%)` : 'BACKUP NOW'}
+                                            ${isBlocked ? 'disabled' : ''}
+                                            class="btn-admin-user-backup font-label text-[9px] tracking-wider text-primary border border-primary/30 px-3 py-1.5 hover:bg-primary hover:text-black transition-all uppercase font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                                        ${isRunningThis ? `BACKING UP (${runningTask.progress}%)` : (this.isBusy ? 'BUSY' : 'BACKUP NOW')}
                                     </button>
                                 </td>
                             </tr>
@@ -713,32 +812,40 @@ const ZNodeBackupModule = {
     },
 
     async triggerServerBackupNow() {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            return;
+        }
         const btn = document.getElementById('btn-trigger-server-backup');
-        btn.disabled = true;
-        btn.textContent = 'INITIALIZING...';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'INITIALIZING...';
+        }
         try {
-            if (window.ZNodeBackupLive) {
-                window.ZNodeBackupLive.startBackupModal('server', "System Server Data");
-            }
             const res = await fetch('/app/admin/api/backup/trigger', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ target_type: 'server', target_id: 'server' })
             });
             const data = await res.json();
-            if (res.ok) {
-                if (window.ZNodeBackupLive && data.task_id) {
-                    window.ZNodeBackupLive.setTaskId(data.task_id);
+            if (res.ok && data.task_id) {
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.startBackupModal('server', "System Server Data", data.task_id);
                 }
                 this.scheduleNext(500);
             } else {
-                await ZNodeDialog.alert("BACKUP FAILED", data.error || "Could not start server backup.");
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "BACKUP FAILED", data.error || "Could not start server backup.");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Backup Server Now';
+                }
+                this.loadAdminConsole();
+            }
+        } catch (e) {
+            if (btn) {
                 btn.disabled = false;
                 btn.textContent = 'Backup Server Now';
             }
-        } catch (e) {
-            btn.disabled = false;
-            btn.textContent = 'Backup Server Now';
         }
     },
 
@@ -793,13 +900,26 @@ const ZNodeBackupModule = {
     },
 
     async triggerUserBackupByAdmin(userId, email) {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            return;
+        }
         try {
             const res = await fetch('/app/admin/api/backup/trigger', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ target_type: 'user', target_id: userId || email })
             });
-            if (res.ok) this.loadAdminConsole();
+            const data = await res.json();
+            if (res.ok && data.task_id) {
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.startBackupModal('user', email || userId, data.task_id);
+                }
+                this.loadAdminConsole();
+            } else {
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "BACKUP FAILED", data.error || "Could not start backup for user.");
+                this.loadAdminConsole();
+            }
         } catch (e) {
             console.error("ADMIN_TRIGGER_USER_ERROR:", e);
         }
@@ -906,8 +1026,9 @@ const ZNodeBackupModule = {
                             DOWNLOAD
                         </a>
                         <button onclick="ZNodeBackupModule.promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}', '${b.target_id}')" 
-                                class="font-label text-[9px] tracking-wider text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2.5 py-1.5 transition-all uppercase font-bold">
-                            RESTORE
+                                ${this.isBusy ? 'disabled' : ''}
+                                class="btn-remote-restore font-label text-[9px] tracking-wider text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2.5 py-1.5 transition-all uppercase font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                            ${this.isBusy ? 'BUSY' : 'RESTORE'}
                         </button>
                         <button onclick="ZNodeBackupModule.deleteRemoteArchive('${b.id}', '${b.filename}')" 
                                 class="font-label text-[9px] tracking-wider text-error/60 hover:text-error hover:bg-error/10 border border-error/20 hover:border-error/40 px-2.5 py-1.5 transition-all uppercase">
@@ -922,6 +1043,10 @@ const ZNodeBackupModule = {
     },
 
     async promptUserRestore() {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            return;
+        }
         const confirmed = await ZNodeDialog.confirm(
             "CONFIRM RESTORE",
             "Restoring will replace current drive files and database records with this backup snapshot.\n\nAny data uploaded or modified after this backup was created will be overwritten.\n\nDo you want to proceed?"
@@ -953,14 +1078,26 @@ const ZNodeBackupModule = {
                     window.ZNodeBackupLive.setTaskId(data.task_id);
                 }
             } else {
-                await ZNodeDialog.alert("RESTORE FAILED", data.error || "Failed to restore drive data.");
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.closeModal();
+                }
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "RESTORE FAILED", data.error || "Failed to restore drive data.");
+                this.fetchUserStatus();
             }
         } catch (e) {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.closeModal();
+            }
             await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
         }
     },
 
     async handleFileRestore(inputEl) {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            inputEl.value = '';
+            return;
+        }
         const file = inputEl.files && inputEl.files[0];
         if (!file) return;
 
@@ -1002,9 +1139,16 @@ const ZNodeBackupModule = {
                     window.ZNodeBackupLive.setTaskId(data.task_id);
                 }
             } else {
-                await ZNodeDialog.alert("RESTORE FAILED", data.error || "Failed to restore from file.");
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.closeModal();
+                }
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "RESTORE FAILED", data.error || "Failed to restore from file.");
+                this.fetchUserStatus();
             }
         } catch (e) {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.closeModal();
+            }
             await ZNodeDialog.alert("ERROR", "Upload and restore failed.");
         } finally {
             inputEl.value = '';
@@ -1012,6 +1156,10 @@ const ZNodeBackupModule = {
     },
 
     async promptRemoteRestore(backupId, filename, targetType, targetId) {
+        if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+            await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+            return;
+        }
         const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${(targetId || '').slice(0, 8)}...)`;
         const confirmed = await ZNodeDialog.confirm(
             "CONFIRM RESTORE",
@@ -1049,9 +1197,16 @@ const ZNodeBackupModule = {
                     window.ZNodeBackupLive.setTaskId(data.task_id);
                 }
             } else {
-                await ZNodeDialog.alert("RESTORE FAILED", data.error || "Restore execution rejected.");
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.closeModal();
+                }
+                await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "RESTORE FAILED", data.error || "Restore execution rejected.");
+                this.loadAdminConsole();
             }
         } catch (e) {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.closeModal();
+            }
             await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
         }
     },
@@ -1075,6 +1230,14 @@ const ZNodeBackupModule = {
 
     onLiveEvent(ev) {
         if (!ev) return;
+        if (ev.type === 'backup_progress') {
+            this.updateActionButtons(true, 'backup', ev.step || '');
+        } else if (ev.type === 'restore_progress') {
+            this.updateActionButtons(true, 'restore', ev.step || '');
+        } else if (ev.type === 'backup_completed' || ev.type === 'backup_failed' || ev.type === 'restore_completed' || ev.type === 'restore_failed') {
+            this.updateActionButtons(false);
+        }
+
         if (ev.operation === 'backup' || ev.type.startsWith('backup_')) {
             const isUser = ev.target_type === 'user';
             const isServer = ev.target_type === 'server';
@@ -1136,6 +1299,18 @@ const ZNodeBackupModule = {
 
     init() {
         window.addEventListener('znode:backup:event', (e) => this.onLiveEvent(e.detail));
+        window.addEventListener('znode:backup:busy', (e) => {
+            const detail = e.detail || {};
+            this.updateActionButtons(true, detail.operation || 'busy', detail.target || '');
+        });
+        window.addEventListener('znode:backup:idle', () => {
+            this.updateActionButtons(false);
+            this.fetchUserStatus();
+            if (this.isAdmin) {
+                this.loadAdminConsole();
+                this.loadRemoteArchives();
+            }
+        });
         this.fetchUserStatus();
         if (this.isAdmin) {
             this.loadAdminConsole();

@@ -17,7 +17,7 @@ class Manifest(ModuleManifest):
         "/api/backup/test_connection", "/api/backup/remote/list",
         "/api/backup/remote/delete", "/api/backup/remote/delete_bulk", 
         "/api/backup/remote/download", "/api/backup/remote/restore",
-        "/api/backup/restore_task_status"
+        "/api/backup/restore_task_status", "/api/backup/task_status"
     ]
 
     def get_view(self, module_name, **kwargs):
@@ -131,13 +131,31 @@ class Manifest(ModuleManifest):
             target_type = data.get('target_type', 'server')
             target_id = data.get('target_id', 'server')
             
-            # Check if active task already running
+            # Guard against concurrent restore
+            active_restore = db_handler.get_active_restore_task(target_type, target_id) or db_handler.get_any_active_restore_task()
+            if active_restore:
+                return jsonify({
+                    "status": "restore_running",
+                    "error": "A restore operation is currently in progress. Backup cannot be started.",
+                    "task_id": active_restore['task_id']
+                }), 409
+
+            # Guard against concurrent backup
             active = db_handler.get_active_backup_task(target_type, target_id)
+            if not active and target_type == 'server':
+                active = db_handler.get_any_active_backup_task()
             if active:
-                return jsonify({"status": "already_running", "task_id": active['task_id']}), 200
+                return jsonify({
+                    "status": "already_running",
+                    "error": "A backup is already running for this target.",
+                    "task_id": active['task_id']
+                }), 409
                 
-            task_id = backup_manager.trigger_backup_async(target_type, target_id)
-            return jsonify({"status": "started", "task_id": task_id}), 202
+            try:
+                task_id = backup_manager.trigger_backup_async(target_type, target_id)
+                return jsonify({"status": "started", "task_id": task_id}), 202
+            except RuntimeError as re:
+                return jsonify({"status": "conflict", "error": str(re)}), 409
 
         if path == "/api/backup/test_connection":
             try:
@@ -222,9 +240,28 @@ class Manifest(ModuleManifest):
             target_id = data.get('target_id')
             if not target_id:
                 target_id = 'server' if target_type == 'server' else None
+
+            active_restore = db_handler.get_active_restore_task(target_type, target_id or 'server') or db_handler.get_any_active_restore_task()
+            if active_restore:
+                return jsonify({
+                    "status": "already_running",
+                    "error": "A restore operation is already in progress.",
+                    "task_id": active_restore['task_id']
+                }), 409
+
+            active_backup = db_handler.get_active_backup_task(target_type, target_id or 'server') or db_handler.get_any_active_backup_task()
+            if active_backup:
+                return jsonify({
+                    "status": "backup_running",
+                    "error": "A backup is currently in progress. Please wait for it to finish before restoring.",
+                    "task_id": active_backup['task_id']
+                }), 409
+
             try:
                 task_id = backup_manager.trigger_restore_async(target_type, target_id or 'server', backup_id=backup_id)
                 return jsonify({"status": "started", "task_id": task_id}), 202
+            except RuntimeError as re:
+                return jsonify({"status": "conflict", "error": str(re)}), 409
             except Exception as e:
                 return jsonify({"error": str(e)}), 400
 
@@ -235,6 +272,14 @@ class Manifest(ModuleManifest):
                 return jsonify({"task": active}), 200
             task = db_handler.get_restore_task(task_id)
             return jsonify({"task": task}), 200
+
+        if path == "/api/backup/task_status":
+            task_id = request.args.get('task_id')
+            if not task_id:
+                active = db_handler.get_any_active_backup_task()
+                return jsonify({"success": True, "task": active}), 200
+            task = db_handler.get_backup_task(task_id)
+            return jsonify({"success": True, "task": task}), 200
 
         return jsonify({"error": "Endpoint not found"}), 404
 

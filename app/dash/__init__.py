@@ -27,7 +27,7 @@ def inject_modules():
     return dict(app_modules=get_loaded_modules(), now_ts=int(time.time()))
 
 
-from flask import send_file, request, jsonify
+from flask import send_file, request, jsonify, stream_with_context, Response, current_app
 from app.modules.user_data import get_user_manager
 
 # ─── File Download API ────────────────────────────────────────
@@ -371,6 +371,42 @@ def api_delete_file(file_uuid):
         return jsonify({"status": "deleted"}), 200
     return jsonify({"error": "File not found"}), 404
 
+@dashboard_bp.route('/api/drive/bulk/delete', methods=['POST'])
+def api_bulk_delete():
+    data = request.get_json(silent=True) or {}
+    file_ids = data.get('file_ids', [])
+    folder_ids = data.get('folder_ids', [])
+    if not isinstance(file_ids, list) or not isinstance(folder_ids, list):
+        return jsonify({"error": "file_ids and folder_ids must be arrays"}), 400
+    if not file_ids and not folder_ids:
+        return jsonify({"error": "No items specified for deletion"}), 400
+
+    manager = get_user_manager()
+    try:
+        res = manager.bulk_delete(file_ids, folder_ids)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@dashboard_bp.route('/api/drive/bulk/move', methods=['POST'])
+def api_bulk_move():
+    data = request.get_json(silent=True) or {}
+    file_ids = data.get('file_ids', [])
+    folder_ids = data.get('folder_ids', [])
+    target_folder_id = data.get('target_folder_id')
+
+    if not isinstance(file_ids, list) or not isinstance(folder_ids, list):
+        return jsonify({"error": "file_ids and folder_ids must be arrays"}), 400
+    if not file_ids and not folder_ids:
+        return jsonify({"error": "No items specified to move"}), 400
+
+    manager = get_user_manager()
+    try:
+        res = manager.bulk_move(file_ids, folder_ids, target_folder_id)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 # ─── Search API ──────────────────────────────────────────────
 
 @dashboard_bp.route('/api/drive/search', methods=['GET'])
@@ -417,6 +453,7 @@ def api_user_backup_status():
     
     cfg = db_handler.get_user_backup_config(email)
     active_task = db_handler.get_active_backup_task('user', user_id)
+    active_restore = db_handler.get_active_restore_task('user', user_id)
     latest_task = db_handler.get_latest_backup_task('user', user_id)
     if not latest_task:
         latest_task = db_handler.get_latest_backup_task('user', email)
@@ -424,6 +461,7 @@ def api_user_backup_status():
     is_admin = db_handler.is_admin(email)
     server_settings = db_handler.get_backup_settings() if is_admin else {}
     global_active = db_handler.get_any_active_backup_task() if is_admin else None
+    global_active_restore = db_handler.get_any_active_restore_task() if is_admin else None
     
     return jsonify({
         "user_id": user_id,
@@ -436,8 +474,10 @@ def api_user_backup_status():
         "last_size": int(cfg.get('last_size') or 0),
         "last_hash": cfg.get('last_hash', ''),
         "active_task": active_task,
+        "active_restore_task": active_restore,
         "latest_task": latest_task,
         "global_active_task": global_active,
+        "global_active_restore_task": global_active_restore,
         "is_admin": is_admin,
         "server_backup_enabled": server_settings.get('server_backup_enabled') == '1' if is_admin else False,
         "server_backup_interval": server_settings.get('server_backup_interval', 'daily') if is_admin else None,
@@ -457,12 +497,40 @@ def api_user_backup_trigger():
     
     if not cfg.get('enabled') and not is_admin:
         return jsonify({"error": "Backups are not enabled for this account. Contact your administrator."}), 403
-        
+
+    active_restore = db_handler.get_active_restore_task('user', user_id) or db_handler.get_any_active_restore_task()
+    if active_restore:
+        return jsonify({
+            "status": "restore_running",
+            "error": "A restore operation is currently in progress. Backup cannot be started.",
+            "task_id": active_restore['task_id']
+        }), 409
+
     active = db_handler.get_active_backup_task('user', user_id)
     if active:
-        return jsonify({"status": "already_running", "task_id": active['task_id']}), 200
-        
-    task_id = backup_manager.trigger_backup_async('user', user_id)
-    return jsonify({"status": "started", "task_id": task_id}), 202
+        return jsonify({
+            "status": "already_running",
+            "error": "A backup is already running for your account.",
+            "task_id": active['task_id']
+        }), 409
+
+    try:
+        task_id = backup_manager.trigger_backup_async('user', user_id)
+        return jsonify({"status": "started", "task_id": task_id}), 202
+    except RuntimeError as re:
+        return jsonify({"status": "conflict", "error": str(re)}), 409
+
+@dashboard_bp.route('/api/backup/user/task_status', methods=['GET'])
+def api_user_backup_task_status():
+    """Retrieve status for a specific user backup task ID."""
+    from app.modules import db_handler
+    user_id = g.user.get('user_id', '')
+    task_id = request.args.get('task_id')
+    if not task_id:
+        task = db_handler.get_active_backup_task('user', user_id)
+    else:
+        task = db_handler.get_backup_task(task_id)
+    return jsonify({"success": True, "task": task}), 200
+
 
 

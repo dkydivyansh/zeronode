@@ -2,7 +2,13 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="theme-color" content="#0e0e0e"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="ZeroNode"/>
+<link rel="manifest" href="/manifest.json"/>
 <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}"/>
 <title>ZeroNode // {% block title %}Drive{% endblock %}</title>
 <script>const _cw = console.warn; console.warn = (...a) => { if (a[0] && a[0].includes('cdn.tailwindcss.com')) return; _cw(...a); };</script>
 <script src="{{ url_for('static', filename='js/tailwind.js') }}?v={{ now_ts }}"></script>
@@ -90,6 +96,29 @@
 </script>
 </head>
 <body class="font-body selection:bg-primary selection:text-on-primary min-h-screen">
+
+<!-- PWA System Update Floating Notification -->
+<div id="pwa-update-banner" class="hidden fixed top-4 right-4 left-4 md:left-auto md:w-96 z-[9990] bg-[#121212] border border-primary/40 p-4 shadow-2xl flex-col gap-3 backdrop-blur-md">
+    <div class="flex items-start justify-between">
+        <div class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+            <span class="font-headline text-xs tracking-widest text-[#e5e5e5] uppercase">SYSTEM UPDATE READY</span>
+        </div>
+        <button onclick="document.getElementById('pwa-update-banner').classList.add('hidden')" class="text-on-surface-variant/40 hover:text-primary transition-colors text-xs font-mono">✕</button>
+    </div>
+    <p class="font-label text-[11px] text-[#a0a0a0] leading-relaxed uppercase">
+        A new application version and updated assets have been verified and cached locally.
+    </p>
+    <div class="flex items-center gap-3 pt-1">
+        <button onclick="ZeroNodePWA.applyUpdate()" class="flex-1 bg-primary text-black font-label text-[10px] tracking-widest py-2 px-3 uppercase font-bold hover:bg-white transition-all text-center">
+            RELOAD NOW
+        </button>
+        <button onclick="document.getElementById('pwa-update-banner').classList.add('hidden')" class="font-label text-[10px] tracking-widest py-2 px-3 text-on-surface-variant/60 hover:text-white uppercase">
+            LATER
+        </button>
+    </div>
+</div>
+
 
 <!-- Session Vault Overlay (Glassmorphism Gateway) -->
 <div id="vault-overlay" class="hidden">
@@ -231,58 +260,62 @@
 </div>
 
 <!-- Bottom Navigation (Global) -->
-<footer class="fixed bottom-0 w-full z-50 bg-black/90 backdrop-blur-sm border-t border-outline-variant/20">
-    <div class="flex justify-between items-center px-4 md:px-8 py-3 md:py-5">
+<footer class="fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-md border-t border-outline-variant/20">
+    <div class="flex justify-between items-center px-3 sm:px-4 md:px-5 lg:px-8 py-2 md:py-2.5 lg:py-3.5 gap-2 md:gap-4 min-w-0">
         <!-- Left Side: Logo & Mobile Toggle -->
-        <div class="flex items-center justify-between w-full md:w-auto">
-            <span class="font-headline text-lg text-on-surface tracking-widest uppercase">ZERONODE</span>
+        <div class="flex items-center justify-between w-full md:w-auto shrink-0">
+            <a href="/app/home" class="font-headline text-base md:text-lg text-on-surface tracking-widest uppercase hover:text-primary transition-colors">ZERONODE</a>
             <!-- Mobile Hamburger -->
-            <button id="mobile-menu-btn" class="md:hidden text-on-surface-variant hover:text-primary transition-colors p-2 interactive-el">
+            <button id="mobile-menu-btn" class="md:hidden text-on-surface-variant hover:text-primary transition-colors p-2 interactive-el" aria-label="Toggle Menu">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
         </div>
 
-        <!-- Desktop Navigation Container (Hidden on Mobile) -->
-        <div class="hidden md:flex flex-1 justify-between items-center ml-8">
-            <nav class="flex items-center gap-6">
+        <!-- Desktop & Tablet Navigation Container (Hidden on Mobile) -->
+        <div class="hidden md:flex flex-1 justify-between items-center ml-2 md:ml-4 lg:ml-6 min-w-0 gap-2 md:gap-4 lg:gap-6">
+            <nav class="flex items-center gap-2.5 md:gap-3.5 lg:gap-5 shrink-0">
                 {% for mod_id, mod in app_modules.items() %}
                 {% if not mod.admin_only or user.is_admin %}
-                <a href="/app/{{ mod_id }}" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-on-surface transition-colors uppercase interactive-el {% if module_name == mod_id %}text-on-surface{% endif %}">{{ mod.name }}</a>
+                <a href="/app/{{ mod_id }}" class="font-label text-[9px] md:text-[10px] lg:text-[11px] tracking-wider lg:tracking-widest text-[#a0a0a0] hover:text-on-surface transition-colors uppercase interactive-el {% if module_name == mod_id %}text-primary font-bold{% endif %}">{{ mod.name }}</a>
                 {% endif %}
                 {% endfor %}
-                <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-[10px] tracking-widest text-[#a0a0a0] hover:text-error transition-colors uppercase interactive-el text-error">Logout</a>
+                <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-[9px] md:text-[10px] lg:text-[11px] tracking-wider lg:tracking-widest text-[#a0a0a0] hover:text-error transition-colors uppercase interactive-el text-error">Logout</a>
 
                 <!-- Global Cache Status (Internal to Nav) -->
-                <button class="dynamic-cache-btn font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase md:ml-4">CACHE [0]</button>
+                <button class="dynamic-cache-btn font-mono text-[8px] lg:text-[9px] tracking-widest text-primary/40 border border-primary/10 px-1.5 lg:px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase hidden xl:inline-block">CACHE [0]</button>
+
+                <!-- PWA Install and Update Triggers -->
+                <button id="pwa-update-nav-btn" onclick="ZeroNodePWA.applyUpdate()" class="hidden font-mono text-[8px] lg:text-[9px] tracking-widest text-tertiary border border-tertiary/40 bg-tertiary/10 px-1.5 lg:px-2 py-0.5 hover:bg-tertiary hover:text-black transition-all interactive-el uppercase animate-pulse">UPDATE</button>
+                <button id="pwa-install-btn" onclick="ZeroNodePWA.installApp()" class="hidden font-mono text-[8px] lg:text-[9px] tracking-widest text-primary/70 border border-primary/20 px-1.5 lg:px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase">INSTALL</button>
             </nav>
 
             <!-- Right Side: Dynamic Context & Identity -->
-            <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2 md:gap-3 lg:gap-5 min-w-0 justify-end shrink">
                 <!-- Module-Specific Action Area -->
-                <div id="module-dynamic-menu" class="flex items-center gap-4">
+                <div id="module-dynamic-menu" class="flex items-center gap-1.5 md:gap-2 lg:gap-3 min-w-0 overflow-x-auto no-scrollbar flex-nowrap py-0.5 max-w-full">
                     {% block dynamic_menu %}{% endblock %}
                 </div>
 
-                <div class="h-4 w-[1px] bg-outline-variant/30"></div>
+                <div class="h-4 w-[1px] bg-outline-variant/30 shrink-0 hidden md:block"></div>
                 
                 <!-- User Context -->
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5 md:gap-2 lg:gap-3 shrink-0">
                     {% if user.profile_photo %}
-                    <img src="{{ user.profile_photo }}" alt="" class="w-6 h-6 rounded-full border border-outline-variant/30 object-cover"/>
+                    <img src="{{ user.profile_photo }}" alt="" class="w-5 h-5 md:w-6 md:h-6 rounded-full border border-outline-variant/30 object-cover"/>
                     {% else %}
-                    <div class="w-6 h-6 rounded-full border border-outline-variant/30 bg-surface-container-highest flex items-center justify-center font-label text-[10px] text-primary select-none">
+                    <div class="w-5 h-5 md:w-6 md:h-6 rounded-full border border-outline-variant/30 bg-surface-container-highest flex items-center justify-center font-label text-[9px] md:text-[10px] text-primary select-none">
                         {{ (user.first_name or '?')[0] | upper }}
                     </div>
                     {% endif %}
-                    <span class="font-label text-[10px] tracking-wider text-on-surface-variant">{{ user.first_name | upper }}</span>
+                    <span class="font-label text-[9px] md:text-[10px] tracking-wider text-on-surface-variant truncate max-w-[55px] lg:max-w-none">{{ user.first_name | upper }}</span>
                 </div>
-                <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden lg:block">dkydivyansh.com</span>
+                <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden 2xl:block">dkydivyansh.com</span>
             </div>
         </div>
     </div>
 
-    <!-- Mobile Dropdown Menu -->
-    <div id="mobile-menu-dropdown" class="hidden flex-col bg-surface-container-highest border-t border-outline-variant/20 px-6 py-6 pb-8 space-y-6 max-h-[70vh] overflow-y-auto">
+    <!-- Mobile Dropdown Menu (Anchored to slide upward from bottom footer) -->
+    <div id="mobile-menu-dropdown" class="hidden flex-col absolute bottom-full left-0 w-full bg-[#121212]/98 border-t border-outline-variant/30 px-6 py-6 pb-8 space-y-6 max-h-[75vh] overflow-y-auto shadow-2xl backdrop-blur-xl z-50">
         <!-- Identity -->
         <div class="flex items-center gap-4 pb-4 border-b border-outline-variant/10">
             {% if user.profile_photo %}
@@ -302,19 +335,21 @@
         <nav class="flex flex-col gap-4">
             {% for mod_id, mod in app_modules.items() %}
             {% if not mod.admin_only or user.is_admin %}
-            <a href="/app/{{ mod_id }}" class="font-label text-xs tracking-[0.2em] {% if module_name == mod_id %}text-primary{% else %}text-on-surface-variant/70{% endif %} hover:text-on-surface transition-colors uppercase interactive-el">{{ mod.name }}</a>
+            <a href="/app/{{ mod_id }}" class="font-label text-xs tracking-[0.2em] {% if module_name == mod_id %}text-primary font-bold{% else %}text-on-surface-variant/70{% endif %} hover:text-on-surface transition-colors uppercase interactive-el">{{ mod.name }}</a>
             {% endif %}
             {% endfor %}
             <div class="flex items-center gap-4 mt-2">
                 <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-xs tracking-[0.2em] text-error/80 hover:text-error transition-colors uppercase interactive-el">Logout</a>
                 <button class="dynamic-cache-btn font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase hidden">CACHE [0]</button>
+                <button id="pwa-update-mobile-btn" onclick="ZeroNodePWA.applyUpdate()" class="hidden font-mono text-[9px] tracking-widest text-tertiary border border-tertiary/40 bg-tertiary/10 px-2 py-0.5 hover:bg-tertiary hover:text-black transition-all interactive-el uppercase animate-pulse">UPDATE [NEW]</button>
+                <button id="mobile-pwa-install-btn" onclick="ZeroNodePWA.installApp()" class="hidden font-mono text-[9px] tracking-widest text-primary/70 border border-primary/20 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase">INSTALL APP</button>
             </div>
         </nav>
 
         <!-- Dynamic Context Area -->
         <div class="flex flex-col gap-3 pt-4 border-t border-outline-variant/10">
             <span class="font-mono text-[9px] text-primary/50 tracking-widest uppercase mb-1">Module Actions</span>
-            <div id="mobile-module-dynamic-menu" class="flex flex-col items-start gap-4 w-full">
+            <div id="mobile-module-dynamic-menu" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
                 <!-- JS will transplant buttons here -->
             </div>
         </div>
@@ -394,11 +429,13 @@
             mobileDynamicMenu.addEventListener('click', (e) => {
                 const btn = e.target.closest('button, a');
                 if (btn && !mobileDropdown.classList.contains('hidden')) {
-                    mobileDropdown.classList.add('hidden');
-                    mobileDropdown.classList.remove('flex');
-                    while (mobileDynamicMenu.firstChild) {
-                        desktopMenu.appendChild(mobileDynamicMenu.firstChild);
-                    }
+                    setTimeout(() => {
+                        mobileDropdown.classList.add('hidden');
+                        mobileDropdown.classList.remove('flex');
+                        while (mobileDynamicMenu.firstChild) {
+                            desktopMenu.appendChild(mobileDynamicMenu.firstChild);
+                        }
+                    }, 120);
                 }
             });
         }
@@ -406,5 +443,6 @@
 </script>
 <script src="{{ url_for('static', filename='js/drive.js') }}?v={{ range(1, 999999) | random }}"></script>
 <script src="{{ url_for('static', filename='js/backup_live.js') }}?v={{ range(1, 999999) | random }}"></script>
+<script src="{{ url_for('static', filename='js/pwa-updater.js') }}?v={{ now_ts }}"></script>
 {% block scripts %}{% endblock %}
 </body></html>

@@ -193,37 +193,35 @@
                         }
                     }
                 } else {
-                    // Backup polling
+                    // Backup polling (using dedicated task status endpoint)
                     const isAdmin = targetType === 'server' || window.location.pathname.includes('/admin');
-                    const endpoint = isAdmin ? '/app/admin/api/backup/status' : '/app/backup/api/user/status';
+                    const endpoint = isAdmin
+                        ? `/app/admin/api/backup/task_status?task_id=${encodeURIComponent(taskId || '')}`
+                        : `/app/backup/api/user/task_status?task_id=${encodeURIComponent(taskId || '')}`;
 
                     const res = await fetch(endpoint);
                     if (res.ok) {
                         const data = await res.json();
-                        const active = data.active_backup || data.active_task || data.global_active_task;
-                        if (active && active.status === 'running') {
-                            const phase = this.guessBackupPhase(active.progress, active.current_step);
-                            this.onBackupEvent({
-                                type: 'backup_progress',
-                                operation: 'backup',
-                                task_id: active.task_id,
-                                target_type: active.target_type,
-                                target_id: active.target_id,
-                                phase: phase,
-                                progress: active.progress,
-                                step: active.current_step
-                            });
-                        } else if (!active && this.activeOperation && this.activeOperation.operation === 'backup') {
-                            // Check latest task for completion
-                            const recent = data.recent_tasks || (data.latest_task ? [data.latest_task] : []);
-                            const latest = recent[0];
-                            if (latest && latest.status === 'success') {
-                                this.handleCompleted({
+                        const task = data.task;
+                        if (task) {
+                            if (!taskId || task.task_id === taskId) {
+                                const phase = this.guessBackupPhase(task.progress, task.current_step);
+                                this.onBackupEvent({
+                                    type: task.status === 'success' ? 'backup_completed' : (task.status === 'failed' ? 'backup_failed' : 'backup_progress'),
                                     operation: 'backup',
-                                    step: 'Backup verified and finalized successfully.'
+                                    task_id: task.task_id,
+                                    target_type: task.target_type,
+                                    target_id: task.target_id,
+                                    phase: phase,
+                                    progress: task.progress,
+                                    step: task.current_step,
+                                    error: task.error_message
                                 });
-                                this.stopPolling();
-                                return;
+
+                                if (task.status === 'success' || task.status === 'failed') {
+                                    this.stopPolling();
+                                    return;
+                                }
                             }
                         }
                     }
@@ -383,8 +381,14 @@
             if (card) card.classList.remove('scale-95');
             this.isModalVisible = true;
 
+            window.dispatchEvent(new CustomEvent('znode:backup:busy', { detail: { operation, taskId, targetInfo } }));
+
             // Start active HTTP polling fallback alongside WebSocket
             this.startPolling(taskId, operation, targetInfo);
+        }
+
+        isOperationRunning() {
+            return Boolean(this.activeOperation && (this.pollingActive || (this.activeOperation.status === 'running')));
         }
 
         setTaskId(taskId) {
@@ -531,6 +535,8 @@
             this.renderStepper(ev.operation || (this.activeOperation && this.activeOperation.operation) || 'restore', 'done');
             this.addLog(`[DONE] ${ev.step || 'Operation completed successfully.'}`);
 
+            window.dispatchEvent(new CustomEvent('znode:backup:idle', { detail: { status: 'completed', operation: ev.operation } }));
+
             if (minimizeBtn) minimizeBtn.classList.add('hidden');
             if (actionBtn) {
                 actionBtn.classList.remove('hidden');
@@ -541,6 +547,9 @@
 
         handleFailed(ev) {
             this.stopPolling();
+            if (this.activeOperation) {
+                this.activeOperation.status = 'failed';
+            }
             const statusBadge = document.getElementById('znode-live-status-badge');
             const actionBtn = document.getElementById('znode-live-btn-action');
             const minimizeBtn = document.getElementById('znode-live-btn-minimize');
@@ -557,6 +566,8 @@
             if (stepEl) stepEl.textContent = errMsg;
             this.addLog(`[ERROR] ${errMsg}`);
 
+            window.dispatchEvent(new CustomEvent('znode:backup:idle', { detail: { status: 'failed', error: errMsg } }));
+
             if (minimizeBtn) minimizeBtn.classList.add('hidden');
             if (actionBtn) {
                 actionBtn.classList.remove('hidden');
@@ -567,6 +578,8 @@
 
         handleAction() {
             const op = this.activeOperation ? this.activeOperation.operation : 'restore';
+            this.activeOperation = null;
+            window.dispatchEvent(new CustomEvent('znode:backup:idle', { detail: { status: 'dismissed' } }));
             this.hideModal();
             if (op === 'restore') {
                 window.location.reload();

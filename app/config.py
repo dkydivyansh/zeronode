@@ -27,6 +27,10 @@ class Config:
     # Administrative Bootstrapping
     ADMIN_EMAIL       = os.environ.get('ADMIN_EMAIL', '')
 
+    # ─── Google Drive Integration ──────────────────────────────────
+    GOOGLE_CLIENT_ID  = os.environ.get('GOOGLE_CLIENT_ID', '')
+    GOOGLE_API_KEY    = os.environ.get('GOOGLE_API_KEY', '')
+
     # Session cookie name
     SESSION_COOKIE_NAME = 'zeronode_session'
 

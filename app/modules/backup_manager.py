@@ -13,6 +13,9 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import shutil
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from datetime import datetime, timezone
 from app.modules import db_handler
 from app.modules import backup_events
@@ -21,7 +24,43 @@ from app.modules import backup_events
 _scheduler_started = False
 _scheduler_lock = threading.Lock()
 
-CHUNK_SIZE = 2 * 1024 * 1024  # 2 MB chunks for reliable streaming
+CHUNK_SIZE = 10 * 1024 * 1024  # 10 MB chunks for fast, reliable streaming
+
+def _get_backup_session(pool_connections: int = 5, pool_maxsize: int = 10, retries: int = 3) -> requests.Session:
+    """Returns a requests.Session configured with HTTP Keep-Alive connection pooling."""
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=retries,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504],
+        raise_on_status=False
+    )
+    adapter = HTTPAdapter(
+        pool_connections=pool_connections,
+        pool_maxsize=pool_maxsize,
+        max_retries=retry_strategy
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+def abort_remote_session(session_id: str, reason: str = ""):
+    """Notifies the PHP backup server to mark an upload session as failed and delete partial chunks."""
+    if not session_id:
+        return
+    try:
+        settings = db_handler.get_backup_settings()
+        server_url = (settings.get('backup_server_url') or 'http://127.0.0.1:8080').rstrip('/')
+        api_key = settings.get('backup_server_api_key') or 'zeronode_secret_backup_key_2026'
+        abort_url = f"{server_url}/api/abort.php"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        with requests.Session() as s:
+            s.post(abort_url, json={"session_id": session_id, "reason": reason}, headers=headers, timeout=10)
+    except Exception as e:
+        print(f"[BackupManager] Remote abort call failed (ignored): {e}")
 
 def _make_sqlite_snapshot(source_db_path: str, target_db_path: str):
     """Safely snapshot a SQLite database using the SQLite backup API."""
@@ -69,19 +108,19 @@ def create_user_archive(user_id: str) -> tuple[str, str, int, dict]:
     temp_fd, temp_zip_path = tempfile.mkstemp(prefix=f"znode_user_{user_id[:8]}_", suffix=".zip.bin")
     os.close(temp_fd)
 
-    with zipfile.ZipFile(temp_zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-        # 1. Manifest
-        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+    with zipfile.ZipFile(temp_zip_path, 'w') as zf:
+        # 1. Manifest (Deflated)
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2), compress_type=zipfile.ZIP_DEFLATED)
 
         if os.path.exists(user_vault_dir):
-            # 2. SQLite Database Snapshot
+            # 2. SQLite Database Snapshot (Deflated)
             user_db_path = os.path.join(user_vault_dir, f"{user_id}.db")
             if os.path.exists(user_db_path):
                 temp_db_fd, temp_db_path = tempfile.mkstemp(suffix=".db")
                 os.close(temp_db_fd)
                 try:
                     _make_sqlite_snapshot(user_db_path, temp_db_path)
-                    zf.write(temp_db_path, arcname=f"{user_id}.db")
+                    zf.write(temp_db_path, arcname=f"{user_id}.db", compress_type=zipfile.ZIP_DEFLATED)
                 finally:
                     if os.path.exists(temp_db_path):
                         try:
@@ -89,13 +128,14 @@ def create_user_archive(user_id: str) -> tuple[str, str, int, dict]:
                         except OSError:
                             pass
 
-            # 3. Encrypted Chunk Blobs (.bin)
+            # 3. Encrypted Chunk Blobs (.bin) -> Stored uncompressed (already AES-GCM encrypted)
+            # This drastically accelerates packaging of multi-gigabyte user drives (e.g. 34 GB)
             bin_count = 0
             for root, _, files in os.walk(user_vault_dir):
                 for fname in files:
                     if fname.endswith(".bin"):
                         fpath = os.path.join(root, fname)
-                        zf.write(fpath, arcname=f"blobs/{fname}")
+                        zf.write(fpath, arcname=f"blobs/{fname}", compress_type=zipfile.ZIP_STORED)
                         bin_count += 1
             manifest["blob_count"] = bin_count
 
@@ -164,29 +204,25 @@ def create_server_archive() -> tuple[str, str, int, dict]:
     return temp_zip_path, file_hash, file_size, manifest
 
 
-def _send_request(url: str, method: str = 'POST', headers: dict = None, body: bytes = None) -> dict:
+def _send_request(url: str, method: str = 'POST', headers: dict = None, body: bytes = None, timeout: int = 60) -> dict:
     """Helper to perform HTTP requests to the PHP backup server with error decoding."""
     headers = headers or {}
-    req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read()
-            return json.loads(data.decode('utf-8'))
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode('utf-8', errors='replace')
+        resp = requests.request(method, url, data=body, headers=headers, timeout=timeout)
         try:
-            parsed = json.loads(err_body)
-            raise RuntimeError(parsed.get('error', f"HTTP {e.code}: {e.reason}"))
-        except json.JSONDecodeError:
-            raise RuntimeError(f"HTTP {e.code}: {err_body or e.reason}")
-    except Exception as e:
+            return resp.json()
+        except Exception:
+            if resp.ok:
+                return {"success": True}
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+    except requests.RequestException as e:
         raise RuntimeError(f"Backup server connection failed: {e}")
 
 
 def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_hash: str, file_size: int, metadata: dict, task_id: str) -> dict:
     """
-    Executes chunked upload with per-chunk SHA-256 validation
-    and overall archive verification against the PHP backup server.
+    Executes chunked upload with per-chunk SHA-256 validation,
+    HTTP Keep-Alive socket pooling, and auto-abort cleanup on the PHP backup server.
     Emits real-time progress events over WebSockets at every phase.
     """
     settings = db_handler.get_backup_settings()
@@ -217,107 +253,162 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
         "step": step_msg
     })
 
-    # ── Phase 1: Initialize Upload Session ───────────────────────────────────
-    init_url = f"{server_url}/api/init.php"
-    init_payload = json.dumps({
-        "target_type": target_type,
-        "target_id": target_id,
-        "filename": filename,
-        "total_size": file_size,
-        "chunk_size": chunk_size,
-        "total_chunks": total_chunks,
-        "file_hash": file_hash,
-        "metadata": metadata
-    }).encode('utf-8')
+    session_id = None
+    http_session = _get_backup_session()
 
-    init_headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    try:
+        # ── Phase 1: Initialize Upload Session ───────────────────────────────────
+        init_url = f"{server_url}/api/init.php"
+        init_payload = {
+            "target_type": target_type,
+            "target_id": target_id,
+            "filename": filename,
+            "total_size": file_size,
+            "chunk_size": chunk_size,
+            "total_chunks": total_chunks,
+            "file_hash": file_hash,
+            "metadata": metadata
+        }
+        init_headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
 
-    init_res = _send_request(init_url, method='POST', headers=init_headers, body=init_payload)
-    if not init_res.get('success'):
-        raise RuntimeError(init_res.get('error', "Upload session initialization rejected."))
+        init_resp = http_session.post(init_url, json=init_payload, headers=init_headers, timeout=60)
+        try:
+            init_res = init_resp.json()
+        except Exception:
+            raise RuntimeError(f"HTTP {init_resp.status_code}: {init_resp.text}")
 
-    session_id = init_res['session_id']
+        if not init_res.get('success'):
+            raise RuntimeError(init_res.get('error', "Upload session initialization rejected."))
 
-    # ── Phase 2: Upload Chunks with SHA-256 Validation ───────────────────────
-    chunk_url = f"{server_url}/api/chunk.php"
+        session_id = init_res['session_id']
 
-    with open(zip_path, 'rb') as f:
-        for idx in range(total_chunks):
-            chunk_data = f.read(chunk_size)
-            if not chunk_data:
-                break
+        # ── Phase 2: Upload Chunks with SHA-256 Validation & Persistent Pooling ──
+        chunk_url = f"{server_url}/api/chunk.php"
 
-            chunk_hash = hashlib.sha256(chunk_data).hexdigest().lower()
-            target_chunk_url = f"{server_url}/api/chunk.php?session_id={session_id}&chunk_index={idx}&chunk_hash={chunk_hash}"
-            chunk_headers = {
-                "Authorization": f"Bearer {api_key}",
-                "X-Session-ID": session_id,
-                "X-Chunk-Index": str(idx),
-                "X-Chunk-Hash": chunk_hash,
-                "Content-Type": "application/octet-stream"
-            }
+        with open(zip_path, 'rb') as f:
+            for idx in range(total_chunks):
+                chunk_data = f.read(chunk_size)
+                if not chunk_data:
+                    break
 
-            chunk_res = _send_request(target_chunk_url, method='POST', headers=chunk_headers, body=chunk_data)
-            if not chunk_res.get('success'):
-                raise RuntimeError(chunk_res.get('error', f"Chunk {idx} rejected by backup server."))
+                chunk_hash = hashlib.sha256(chunk_data).hexdigest().lower()
+                target_chunk_url = f"{server_url}/api/chunk.php?session_id={session_id}&chunk_index={idx}&chunk_hash={chunk_hash}"
+                chunk_headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "X-Session-ID": session_id,
+                    "X-Chunk-Index": str(idx),
+                    "X-Chunk-Hash": chunk_hash,
+                    "Content-Type": "application/octet-stream"
+                }
 
-            # Live upload progress scales from 30% to 85%
-            pct = int(30 + ((idx + 1) / total_chunks) * 55)
-            step_msg = f"Uploading chunk {idx + 1}/{total_chunks} ({pct}%)..."
-            db_handler.update_backup_task(
-                task_id, 
-                progress=pct, 
-                current_step=step_msg
-            )
-            backup_events.broadcast_event({
-                "type": "backup_progress",
-                "operation": "backup",
-                "task_id": task_id,
-                "target_type": target_type,
-                "target_id": target_id,
-                "phase": "upload",
-                "progress": pct,
-                "step": step_msg,
-                "chunk_index": idx + 1,
-                "total_chunks": total_chunks
-            })
+                # Upload chunk with robust per-chunk retry resilience
+                max_chunk_retries = 5
+                chunk_ok = False
+                last_err = None
 
-    # ── Phase 3: Finalize, Verify Full Hash & Auto-Prune ──────────────────────
-    step_msg = "Verifying remote checksum & auto-pruning archives on backup server..."
-    db_handler.update_backup_task(task_id, progress=88, current_step=step_msg)
-    backup_events.broadcast_event({
-        "type": "backup_progress",
-        "operation": "backup",
-        "task_id": task_id,
-        "target_type": target_type,
-        "target_id": target_id,
-        "phase": "verify",
-        "progress": 88,
-        "step": step_msg
-    })
+                for attempt in range(1, max_chunk_retries + 1):
+                    try:
+                        resp = http_session.post(
+                            target_chunk_url,
+                            data=chunk_data,
+                            headers=chunk_headers,
+                            timeout=90
+                        )
+                        if resp.status_code == 200:
+                            chunk_res = resp.json()
+                            if chunk_res.get('success'):
+                                chunk_ok = True
+                                break
+                            raise RuntimeError(chunk_res.get('error', f"Chunk {idx} rejected by server."))
+                        elif resp.status_code in [500, 502, 503, 504, 408]:
+                            last_err = f"Server returned HTTP {resp.status_code}"
+                            time.sleep(attempt * 1.5)
+                        else:
+                            try:
+                                err_data = resp.json()
+                                err_text = err_data.get('error', f"HTTP {resp.status_code}")
+                            except Exception:
+                                err_text = f"HTTP {resp.status_code}: {resp.text[:100]}"
+                            raise RuntimeError(err_text)
+                    except (requests.RequestException, ConnectionError, OSError) as ce:
+                        last_err = str(ce)
+                        if attempt < max_chunk_retries:
+                            time.sleep(attempt * 1.5)
+                            continue
+                        raise RuntimeError(f"Backup server connection failed on chunk {idx + 1}/{total_chunks} after {max_chunk_retries} attempts: {last_err}")
 
-    finalize_url = f"{server_url}/api/finalize.php"
-    finalize_payload = json.dumps({"session_id": session_id}).encode('utf-8')
-    finalize_headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+                if not chunk_ok:
+                    raise RuntimeError(f"Chunk {idx + 1}/{total_chunks} failed: {last_err}")
 
-    finalize_res = _send_request(finalize_url, method='POST', headers=finalize_headers, body=finalize_payload)
-    if not finalize_res.get('success'):
-        raise RuntimeError(finalize_res.get('error', "Final assembly and verification failed."))
+                # Live upload progress scales from 30% to 85%
+                pct = int(30 + ((idx + 1) / total_chunks) * 55)
+                step_msg = f"Uploading chunk {idx + 1}/{total_chunks} ({pct}%)..."
+                db_handler.update_backup_task(
+                    task_id, 
+                    progress=pct, 
+                    current_step=step_msg
+                )
+                backup_events.broadcast_event({
+                    "type": "backup_progress",
+                    "operation": "backup",
+                    "task_id": task_id,
+                    "target_type": target_type,
+                    "target_id": target_id,
+                    "phase": "upload",
+                    "progress": pct,
+                    "step": step_msg,
+                    "chunk_index": idx + 1,
+                    "total_chunks": total_chunks
+                })
 
-    db_handler.record_backup_result(
-        target_type, target_id,
-        success=True,
-        size=file_size,
-        file_hash=file_hash
-    )
+        # ── Phase 3: Finalize, Verify Full Hash & Auto-Prune ──────────────────────
+        step_msg = "Verifying remote checksum & auto-pruning archives on backup server..."
+        db_handler.update_backup_task(task_id, progress=88, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "backup_progress",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "verify",
+            "progress": 88,
+            "step": step_msg
+        })
 
-    return finalize_res
+        finalize_url = f"{server_url}/api/finalize.php"
+        finalize_payload = {"session_id": session_id}
+        finalize_headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        fin_resp = http_session.post(finalize_url, json=finalize_payload, headers=finalize_headers, timeout=120)
+        try:
+            finalize_res = fin_resp.json()
+        except Exception:
+            raise RuntimeError(f"HTTP {fin_resp.status_code}: {fin_resp.text}")
+
+        if not finalize_res.get('success'):
+            raise RuntimeError(finalize_res.get('error', "Final assembly and verification failed."))
+
+        db_handler.record_backup_result(
+            target_type, target_id,
+            success=True,
+            size=file_size,
+            file_hash=file_hash
+        )
+
+        return finalize_res
+
+    except Exception as e:
+        if session_id:
+            abort_remote_session(session_id, reason=str(e))
+        raise
+    finally:
+        http_session.close()
 
 
 def run_backup(target_type: str, target_id: str, task_id: str = None) -> bool:
@@ -452,7 +543,20 @@ def trigger_backup_async(target_type: str, target_id: str) -> str:
     """
     Asynchronously launches a backup job in a background daemon thread.
     Returns the task_id immediately for real-time progress polling.
+    Raises RuntimeError if a backup or restore job is already running.
     """
+    # 1. Guard against concurrent restore
+    active_restore = db_handler.get_active_restore_task(target_type, target_id) or db_handler.get_any_active_restore_task()
+    if active_restore:
+        raise RuntimeError(f"Cannot start backup: a restore operation ({active_restore['task_id'][:8]}) is currently in progress.")
+
+    # 2. Guard against concurrent backup
+    active_backup = db_handler.get_active_backup_task(target_type, target_id)
+    if not active_backup and target_type == 'server':
+        active_backup = db_handler.get_any_active_backup_task()
+    if active_backup:
+        raise RuntimeError(f"Backup is already running ({active_backup['task_id'][:8]}).")
+
     task_id = str(uuid.uuid4())
     db_handler.create_backup_task(task_id, target_type, target_id)
 
@@ -560,21 +664,20 @@ def delete_all_remote_backups() -> dict:
 def stream_remote_backup(backup_id: str):
     """
     Streams a remote backup archive from the PHP backup server using backend API credentials.
-    Returns the urllib.response object.
+    Returns the requests streaming response.
     """
     settings = db_handler.get_backup_settings()
     server_url = (settings.get('backup_server_url') or 'http://127.0.0.1:8080').rstrip('/')
     api_key = settings.get('backup_server_api_key') or 'zeronode_secret_backup_key_2026'
 
     download_url = f"{server_url}/api/download.php?backup_id={urllib.parse.quote(backup_id)}"
-    req = urllib.request.Request(download_url, headers={
-        "Authorization": f"Bearer {api_key}"
-    })
+    headers = {"Authorization": f"Bearer {api_key}"}
     try:
-        return urllib.request.urlopen(req, timeout=60)
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Remote backup download failed: HTTP {e.code}")
-    except Exception as e:
+        resp = requests.get(download_url, headers=headers, stream=True, timeout=90)
+        if not resp.ok:
+            raise RuntimeError(f"Remote backup download failed: HTTP {resp.status_code}")
+        return resp
+    except requests.RequestException as e:
         raise RuntimeError(f"Could not connect to backup server: {e}")
 
 
@@ -593,10 +696,9 @@ def download_backup_to_temp(backup_id: str, task_id: str = None, target_type: st
     last_report_time = time.time()
 
     with os.fdopen(temp_fd, 'wb') as f:
-        while True:
-            chunk = remote_resp.read(65536)
+        for chunk in remote_resp.iter_content(chunk_size=65536):
             if not chunk:
-                break
+                continue
             f.write(chunk)
             downloaded_bytes += len(chunk)
 
@@ -981,7 +1083,18 @@ def trigger_restore_async(target_type: str, target_id: str, backup_id: str = Non
     """
     Asynchronously launches a restore job in a background daemon thread.
     Returns task_id immediately.
+    Raises RuntimeError if a restore or backup job is already running.
     """
+    # 1. Guard against concurrent restore
+    active_restore = db_handler.get_active_restore_task(target_type, target_id) or db_handler.get_any_active_restore_task()
+    if active_restore:
+        raise RuntimeError(f"Restore is already running ({active_restore['task_id'][:8]}).")
+
+    # 2. Guard against concurrent backup
+    active_backup = db_handler.get_active_backup_task(target_type, target_id) or db_handler.get_any_active_backup_task()
+    if active_backup:
+        raise RuntimeError(f"Cannot start restore: a backup operation ({active_backup['task_id'][:8]}) is currently in progress.")
+
     task_id = str(uuid.uuid4())
     db_handler.create_restore_task(task_id, target_type, target_id, backup_id=backup_id or '')
 

@@ -13,7 +13,7 @@
 {% set domain = email_parts[1] if email_parts|length > 1 else '' %}
 {% set masked_email = local[:2] ~ '***' ~ local[-1:] ~ '@' ~ domain if local|length > 3 else local[:1] ~ '***@' ~ domain %}
 
-<div class="px-8 pt-12">
+<div class="px-4 md:px-8 pt-12">
     <!-- Welcome -->
     <div class="mb-12">
         <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
@@ -254,6 +254,7 @@
 
 <script>
     const ZNodeHomeBackup = {
+        isBusy: false,
         pollTimer: null,
         
         formatBytes(bytes) {
@@ -295,12 +296,37 @@
                     adminShortcut.classList.remove('hidden');
                 }
                 
+                const activeRestore = (data.active_restore_task && data.active_restore_task.status === 'running')
+                    ? data.active_restore_task
+                    : (data.is_admin && data.global_active_restore_task && data.global_active_restore_task.status === 'running' ? data.global_active_restore_task : null);
+
+                if (activeRestore) {
+                    this.isBusy = true;
+                    activeBox.classList.remove('hidden');
+                    activeTarget.textContent = `Restoring: ${activeRestore.target_type === 'server' ? 'Server Data' : 'Account Drive'}`;
+                    activePercent.textContent = `${activeRestore.progress}%`;
+                    progressFill.style.width = `${Math.min(100, Math.max(2, activeRestore.progress))}%`;
+                    activeStep.textContent = activeRestore.current_step || 'Restoring files...';
+
+                    badgeEl.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-amber-500/40 text-amber-400 bg-amber-500/10 uppercase animate-pulse";
+                    badgeEl.textContent = `RESTORING (${activeRestore.progress}%)`;
+
+                    if (triggerBtn) {
+                        triggerBtn.disabled = true;
+                        triggerBtn.textContent = 'RESTORING...';
+                    }
+
+                    this.scheduleNext(1500);
+                    return;
+                }
+
                 // Active task resolution: user's active task first, then global active task if admin
                 const active = data.active_task && data.active_task.status === 'running' 
                     ? data.active_task 
                     : (data.is_admin && data.global_active_task && data.global_active_task.status === 'running' ? data.global_active_task : null);
                     
                 if (active) {
+                    this.isBusy = true;
                     // Backing up state
                     activeBox.classList.remove('hidden');
                     const targetLabel = active.target_type === 'server' ? 'System Server Data' : (active.target_id === data.user_id ? 'Your Account Drive' : `User (${active.target_id.slice(0, 8)}...)`);
@@ -322,6 +348,7 @@
                 }
                 
                 // Idle / Non-uploading state
+                this.isBusy = false;
                 activeBox.classList.add('hidden');
                 
                 if (triggerBtn) {
@@ -392,6 +419,7 @@
             const triggerBtn = document.getElementById('backup-btn-trigger');
 
             if (ev.type === 'backup_progress') {
+                this.isBusy = true;
                 if (activeBox) activeBox.classList.remove('hidden');
                 const targetLabel = ev.target_type === 'server' ? 'System Server Data' : 'Your Account Drive';
                 if (activeTarget) activeTarget.textContent = `Backing Up: ${targetLabel}`;
@@ -407,6 +435,7 @@
                     triggerBtn.textContent = 'UPLOADING...';
                 }
             } else if (ev.type === 'restore_progress') {
+                this.isBusy = true;
                 if (activeBox) activeBox.classList.remove('hidden');
                 const targetLabel = ev.target_type === 'server' ? 'System Server Data' : 'Your Account Drive';
                 if (activeTarget) activeTarget.textContent = `Restoring: ${targetLabel}`;
@@ -417,13 +446,23 @@
                     badgeEl.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-amber-500/40 text-amber-400 bg-amber-500/10 uppercase animate-pulse";
                     badgeEl.textContent = `RESTORING (${ev.progress}%)`;
                 }
+                if (triggerBtn) {
+                    triggerBtn.disabled = true;
+                    triggerBtn.textContent = 'RESTORING...';
+                }
             } else if (ev.type === 'backup_completed' || ev.type === 'backup_failed' || ev.type === 'restore_completed' || ev.type === 'restore_failed') {
+                this.isBusy = false;
                 if (activeBox) activeBox.classList.add('hidden');
                 this.fetchBackupStatus();
             }
         },
 
         async triggerNow() {
+            if (this.isBusy || (window.ZNodeBackupLive && window.ZNodeBackupLive.isOperationRunning())) {
+                await ZNodeDialog.alert("OPERATION IN PROGRESS", "A backup or restore operation is already running. Please wait for it to complete.");
+                return;
+            }
+
             const triggerBtn = document.getElementById('backup-btn-trigger');
             if (triggerBtn) {
                 triggerBtn.disabled = true;
@@ -441,17 +480,24 @@
                 const data = await res.json();
                 
                 if (!res.ok) {
-                    await ZNodeDialog.alert("Backup Error", data.error || "Failed to trigger user backup.");
+                    if (window.ZNodeBackupLive) {
+                        window.ZNodeBackupLive.closeModal();
+                    }
+                    await ZNodeDialog.alert(res.status === 409 ? "OPERATION IN PROGRESS" : "Backup Error", data.error || "Failed to trigger user backup.");
                     if (triggerBtn) {
                         triggerBtn.disabled = false;
                         triggerBtn.textContent = 'Backup Now';
                     }
+                    this.fetchBackupStatus();
                     return;
                 }
                 
                 // Immediately poll
                 this.fetchBackupStatus();
             } catch (err) {
+                if (window.ZNodeBackupLive) {
+                    window.ZNodeBackupLive.closeModal();
+                }
                 await ZNodeDialog.alert("Connection Error", "Could not reach the server to start backup.");
                 if (triggerBtn) {
                     triggerBtn.disabled = false;
@@ -462,6 +508,18 @@
         
         init() {
             window.addEventListener('znode:backup:event', (e) => this.onLiveEvent(e.detail));
+            window.addEventListener('znode:backup:busy', () => {
+                this.isBusy = true;
+                const triggerBtn = document.getElementById('backup-btn-trigger');
+                if (triggerBtn) {
+                    triggerBtn.disabled = true;
+                    triggerBtn.textContent = 'BUSY...';
+                }
+            });
+            window.addEventListener('znode:backup:idle', () => {
+                this.isBusy = false;
+                this.fetchBackupStatus();
+            });
             this.fetchBackupStatus();
         }
     };
