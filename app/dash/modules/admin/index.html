@@ -56,7 +56,7 @@
             <div>
                 <h2 class="font-headline text-lg tracking-[0.2em] text-error uppercase mb-4">Reset Server</h2>
                 <p class="font-label text-[9px] tracking-[0.1em] text-on-surface-variant/60 uppercase leading-relaxed mb-6">
-                    PERMANENT RESET: Purge database, configuration, and all stored user file volumes.
+                    PERMANENT RESET: Delete database, configuration, and all stored user files.
                 </p>
             </div>
             
@@ -106,6 +106,230 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    <!-- Section: Automated Backup & Storage -->
+    <div id="backup-section" class="mb-20">
+        <div class="flex items-center gap-4 mb-2">
+            <h2 class="font-headline text-2xl tracking-[0.2em] text-on-surface uppercase">BACKUP &amp; RESTORE</h2>
+            <div class="h-[1px] flex-1 bg-gradient-to-r from-outline-variant/40 to-transparent"></div>
+        </div>
+        <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase mb-8">
+            OFFSITE ENCRYPTED REPLICATION &bull; SHA-256 VERIFIED BACKUPS
+        </p>
+
+        <!-- Top Row: Remote Server Config & Server Data Backup -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+
+            <!-- Card 1: Remote PHP Backup Server Configuration -->
+            <div class="border border-outline-variant/10 p-8 bg-surface-container/20 backdrop-blur-sm relative overflow-hidden flex flex-col justify-between">
+                <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <p class="font-label text-[10px] tracking-widest text-primary/60 uppercase">REMOTE BACKUP SERVER</p>
+                        <span id="remote-conn-badge" class="font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-outline-variant/30 text-on-surface-variant/50 uppercase">
+                            STATUS: PENDING
+                        </span>
+                    </div>
+
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="block font-label text-[9px] tracking-widest text-on-surface-variant/40 uppercase mb-1.5">SERVER ENDPOINT URL</label>
+                            <input type="text" id="cfg-backup-url" placeholder="http://127.0.0.1:8080" class="w-full bg-black/40 border border-outline-variant/20 px-3.5 py-2.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                        </div>
+
+                        <div>
+                            <label class="block font-label text-[9px] tracking-widest text-on-surface-variant/40 uppercase mb-1.5">AUTHENTICATION API KEY</label>
+                            <input type="password" id="cfg-backup-key" placeholder="API Key" class="w-full bg-black/40 border border-outline-variant/20 px-3.5 py-2.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                        </div>
+
+                        <div>
+                            <label class="block font-label text-[9px] tracking-widest text-on-surface-variant/40 uppercase mb-1.5">MAX BACKUP RETENTION (PER ACCOUNT)</label>
+                            <select id="cfg-backup-retention" class="w-full bg-black/40 border border-outline-variant/20 px-3.5 py-2.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                                <option value="2">Keep past 2 backups</option>
+                                <option value="3">Keep past 3 backups</option>
+                                <option value="4" selected>Keep past 4 backups (Default)</option>
+                                <option value="5">Keep past 5 backups</option>
+                                <option value="8">Keep past 8 backups</option>
+                            </select>
+                            <p class="font-label text-[8px] text-on-surface-variant/40 mt-1 uppercase">Automated rotation: older backups are removed when new backups complete.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 pt-4 border-t border-outline-variant/10">
+                    <button onclick="testRemoteConnection()" class="flex-1 py-2.5 bg-white/5 border border-outline-variant/20 text-on-surface hover:text-primary hover:border-primary/40 font-label text-[9px] tracking-widest uppercase transition-all">
+                        Test Connection
+                    </button>
+                    <button onclick="saveBackupSettings()" class="flex-1 py-2.5 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase font-bold transition-all">
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card 2: Server Master Backup Settings & Instant Trigger -->
+            <div class="border border-outline-variant/10 p-8 bg-surface-container/20 backdrop-blur-sm relative overflow-hidden flex flex-col justify-between">
+                <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <p class="font-label text-[10px] tracking-widest text-primary/60 uppercase">SYSTEM DATABASE &amp; SERVER DATA</p>
+                        <span id="server-backup-status-badge" class="font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-outline-variant/30 text-on-surface-variant/50 uppercase">
+                            STATUS: PENDING
+                        </span>
+                    </div>
+
+                    <div class="space-y-4 mb-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block font-label text-[9px] tracking-widest text-on-surface-variant/40 uppercase mb-1.5">AUTOMATED SERVER BACKUP</label>
+                                <select id="cfg-server-enabled" class="w-full bg-black/40 border border-outline-variant/20 px-3.5 py-2.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                                    <option value="1">Enabled (Default)</option>
+                                    <option value="0">Disabled</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-label text-[9px] tracking-widest text-on-surface-variant/40 uppercase mb-1.5">BACKUP SCHEDULE</label>
+                                <select id="cfg-server-interval" class="w-full bg-black/40 border border-outline-variant/20 px-3.5 py-2.5 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                                    <option value="daily">Daily (Default)</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Metrics Grid for Server Backup -->
+                        <div class="grid grid-cols-2 gap-3 text-[10px] font-label pt-2">
+                            <div class="border border-outline-variant/10 p-3 bg-surface-container/30">
+                                <p class="text-[8px] text-on-surface-variant/40 uppercase tracking-widest mb-1">LAST SERVER BACKUP</p>
+                                <p id="server-backup-last-time" class="font-mono text-xs text-on-surface truncate">Never</p>
+                            </div>
+                            <div class="border border-outline-variant/10 p-3 bg-surface-container/30">
+                                <p class="text-[8px] text-on-surface-variant/40 uppercase tracking-widest mb-1">BACKUP SIZE</p>
+                                <p id="server-backup-last-size" class="font-mono text-xs text-on-surface truncate">-</p>
+                            </div>
+                        </div>
+
+                        <!-- Active Server Backup Task Indicator -->
+                        <div id="server-task-progress-box" class="p-3 border border-primary/30 bg-primary/5 hidden">
+                            <div class="flex justify-between items-center text-[10px] font-mono text-primary mb-1">
+                                <span id="server-task-step" class="truncate font-label uppercase">Backing up server...</span>
+                                <span id="server-task-pct" class="font-bold">0%</span>
+                            </div>
+                            <div class="w-full bg-surface-container h-1 overflow-hidden border border-primary/20">
+                                <div id="server-task-bar" class="bg-primary h-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 pt-4 border-t border-outline-variant/10">
+                    <button onclick="saveServerBackupSchedule()" class="flex-1 py-2.5 bg-white/5 border border-outline-variant/20 text-on-surface hover:text-primary hover:border-primary/40 font-label text-[9px] tracking-widest uppercase transition-all">
+                        Update Schedule
+                    </button>
+                    <button id="btn-trigger-server-backup" onclick="triggerServerBackupNow()" class="flex-1 py-2.5 bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase font-bold transition-all">
+                        Backup Server Now
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- User Backup Policies Management Table -->
+        <div class="mb-10">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
+                <div>
+                    <h3 class="font-headline text-lg tracking-[0.2em] text-on-surface uppercase mb-1">USER BACKUP POLICIES</h3>
+                    <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase">
+                        ADMINS ENABLED BY DEFAULT (DAILY) &bull; NON-ADMINS CONFIGURED INDIVIDUALLY BY EMAIL
+                    </p>
+                </div>
+
+                <!-- Quick Enable User By Email Form -->
+                <div class="flex gap-2 items-center">
+                    <input type="email" id="quick-backup-email" placeholder="USER EMAIL TO ENABLE" class="bg-black/40 border border-outline-variant/20 px-3 py-2 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors w-56">
+                    <select id="quick-backup-interval" class="bg-black/40 border border-outline-variant/20 px-3 py-2 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                    </select>
+                    <button onclick="enableBackupByEmail()" class="px-4 py-2 bg-primary/10 border border-primary/20 text-primary hover:bg-primary hover:text-black font-label text-[9px] tracking-widest uppercase font-bold transition-all">
+                        Enable
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table of User Backup Policies -->
+            <div class="border border-outline-variant/10 bg-surface-container/20 backdrop-blur-sm overflow-hidden">
+                <table class="w-full text-left font-label text-[11px] tracking-wide border-collapse">
+                    <thead>
+                        <tr class="bg-white/5 uppercase text-on-surface-variant/60">
+                            <th class="px-6 py-4 font-bold tracking-widest">User Profile</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Status</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Interval</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Last Backup</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Backup Size</th>
+                            <th class="px-6 py-4 font-bold tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-backups-tbody">
+                        <tr class="animate-pulse">
+                            <td colspan="6" class="px-6 py-10 text-center text-on-surface-variant/40 uppercase tracking-[0.3em]">Loading user backup configurations...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Remote Backup Archives Stored on Server -->
+        <div>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                    <h3 class="font-headline text-lg tracking-[0.2em] text-on-surface uppercase mb-1">REMOTE BACKUP REPOSITORY</h3>
+                    <p class="font-label text-[10px] tracking-[0.2em] text-on-surface-variant/40 uppercase">
+                        BACKUPS STORED ON REMOTE SERVER (AUTO-ROTATED BY RETENTION POLICY)
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="btn-remote-bulk-delete" onclick="deleteSelectedRemoteArchives()" class="hidden px-3.5 py-2 border border-error/40 bg-error/10 text-error hover:bg-error hover:text-white font-label text-[9px] tracking-widest uppercase font-bold transition-all">
+                        DELETE SELECTED (<span id="remote-selected-count">0</span>)
+                    </button>
+                    <button onclick="loadRemoteArchives()" class="px-4 py-2 border border-outline-variant/30 text-on-surface-variant/70 hover:text-primary hover:border-primary/40 font-label text-[9px] tracking-widest uppercase transition-all">
+                        Refresh Archives
+                    </button>
+                </div>
+            </div>
+
+            <!-- Restore Notice Callout -->
+            <div class="mb-4 p-3.5 border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+                <svg class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <p class="font-label text-[10px] tracking-wider text-on-surface-variant/80">
+                    <span class="text-amber-400 font-bold uppercase">RESTORE NOTICE:</span> Executing a restore will replace active data for the target (System database or User account). Any files or records created after the backup timestamp will be replaced.
+                </p>
+            </div>
+
+            <div class="border border-outline-variant/10 bg-surface-container/20 backdrop-blur-sm overflow-hidden">
+                <table class="w-full text-left font-label text-[11px] tracking-wide border-collapse">
+                    <thead>
+                        <tr class="bg-white/5 uppercase text-on-surface-variant/60">
+                            <th class="px-4 py-4 w-10 text-center">
+                                <input type="checkbox" id="remote-select-all" onchange="toggleSelectAllRemote(this)" class="accent-primary cursor-pointer w-3.5 h-3.5" title="Select All">
+                            </th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Target</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Filename</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Size</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Checksum (SHA-256)</th>
+                            <th class="px-6 py-4 font-bold tracking-widest">Date Created</th>
+                            <th class="px-6 py-4 font-bold tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="remote-archives-tbody">
+                        <tr>
+                            <td colspan="7" class="px-6 py-8 text-center text-on-surface-variant/30 uppercase tracking-[0.3em]">Click 'Refresh Archives' or 'Test Connection' to inspect remote backups.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
     <!-- Section: Identity Ledger (Whitelist & Admins) -->
@@ -338,7 +562,7 @@ async function authorizeSystemReset() {
         return;
     }
     
-    await ZNodeDialog.alert("RESETTING SERVER", "Server reset authorized. Executing data purge...");
+    await ZNodeDialog.alert("RESETTING SERVER", "Server reset authorized. Resetting all system data...");
     
     try {
         const res = await fetch('/app/admin/api/server/wipe', {
@@ -360,9 +584,528 @@ async function authorizeSystemReset() {
     }
 }
 
-// Initial engagement and rolling telemetry
+// ─── Automated Backup & Storage Logic ───────────────────────
+
+let backupPollInterval = null;
+
+function formatBackupBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatBackupDate(ts) {
+    if (!ts || ts <= 0) return 'Never';
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadBackupConsole() {
+    try {
+        const res = await fetch('/app/admin/api/backup/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // 1. Settings & Server Backup
+        const s = data.settings || {};
+        if (document.getElementById('cfg-backup-url')) {
+            document.getElementById('cfg-backup-url').value = s.backup_server_url || 'http://127.0.0.1:8080';
+            document.getElementById('cfg-backup-key').value = s.backup_server_api_key || 'zeronode_secret_backup_key_2026';
+            document.getElementById('cfg-backup-retention').value = s.backup_retention || '4';
+            document.getElementById('cfg-server-enabled').value = s.server_backup_enabled === '0' ? '0' : '1';
+            document.getElementById('cfg-server-interval').value = s.server_backup_interval || 'daily';
+            
+            // Server Backup Status
+            const serverStatusBadge = document.getElementById('server-backup-status-badge');
+            const serverLastTime = document.getElementById('server-backup-last-time');
+            const serverLastSize = document.getElementById('server-backup-last-size');
+            
+            const lastStatus = s.last_server_backup_status || 'never';
+            if (lastStatus === 'success') {
+                serverStatusBadge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 uppercase";
+                serverStatusBadge.textContent = "UP TO DATE";
+            } else if (lastStatus === 'failed') {
+                serverStatusBadge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-error/40 text-error bg-error/10 uppercase";
+                serverStatusBadge.textContent = "FAILED";
+            } else {
+                serverStatusBadge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-outline-variant/30 text-on-surface-variant/50 uppercase";
+                serverStatusBadge.textContent = "READY";
+            }
+            
+            serverLastTime.textContent = formatBackupDate(parseInt(s.last_server_backup_at || 0));
+            serverLastSize.textContent = s.last_server_backup_size ? formatBackupBytes(parseInt(s.last_server_backup_size)) : '-';
+        }
+        
+        // 2. Active Tasks Tracking
+        const recentTasks = data.recent_tasks || [];
+        const runningTask = recentTasks.find(t => t.status === 'running');
+        
+        const serverTaskBox = document.getElementById('server-task-progress-box');
+        const serverTaskStep = document.getElementById('server-task-step');
+        const serverTaskPct = document.getElementById('server-task-pct');
+        const serverTaskBar = document.getElementById('server-task-bar');
+        const btnTriggerServer = document.getElementById('btn-trigger-server-backup');
+        
+        if (runningTask && runningTask.target_type === 'server') {
+            serverTaskBox.classList.remove('hidden');
+            serverTaskStep.textContent = runningTask.current_step || 'Backing up server...';
+            serverTaskPct.textContent = `${runningTask.progress}%`;
+            serverTaskBar.style.width = `${runningTask.progress}%`;
+            if (btnTriggerServer) {
+                btnTriggerServer.disabled = true;
+                btnTriggerServer.textContent = 'Backing up...';
+            }
+            scheduleBackupPoll(2000);
+        } else {
+            serverTaskBox.classList.add('hidden');
+            if (btnTriggerServer) {
+                btnTriggerServer.disabled = false;
+                btnTriggerServer.textContent = 'Backup Server Now';
+            }
+        }
+        
+        // 3. Render User Vault Backup Policies Table
+        const userConfigs = data.user_configs || [];
+        const tbody = document.getElementById('user-backups-tbody');
+        if (tbody) {
+            if (userConfigs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-on-surface-variant/30 uppercase tracking-[0.3em]">No user accounts registered.</td></tr>';
+            } else {
+                tbody.innerHTML = userConfigs.map(u => {
+                    const isRunning = runningTask && runningTask.target_type === 'user' && runningTask.target_id === u.user_id;
+                    const statusClass = u.last_status === 'success' ? 'text-emerald-400' : (u.last_status === 'failed' ? 'text-error' : 'text-on-surface-variant/50');
+                    return `
+                        <tr class="border-t border-outline-variant/10 hover:bg-white/5 transition-all group">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    ${u.profile_photo ? 
+                                        `<img src="${u.profile_photo}" alt="" class="w-8 h-8 rounded-full border border-outline-variant/20 object-cover">` :
+                                        `<div class="w-8 h-8 rounded-full border border-outline-variant/20 bg-surface-container-highest flex items-center justify-center font-headline text-xs text-primary select-none">
+                                            ${(u.first_name || u.email || '?')[0].toUpperCase()}
+                                        </div>`
+                                    }
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-bold text-on-surface tracking-tight text-xs truncate">${u.first_name || ''} ${u.last_name || ''}</p>
+                                            ${u.is_admin ? '<span class="font-label text-[8px] px-1.5 py-0.5 border border-primary/40 text-primary uppercase">Admin</span>' : ''}
+                                        </div>
+                                        <p class="font-mono text-[9px] text-on-surface-variant/50 lowercase truncate">${u.email}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <button onclick="toggleUserBackupPolicy('${u.email}', ${u.enabled ? 0 : 1}, '${u.interval}')" 
+                                        class="font-label text-[9px] px-2.5 py-1 tracking-wider border uppercase transition-all ${u.enabled ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:border-emerald-500' : 'border-outline-variant/30 text-on-surface-variant/40 hover:border-outline-variant/60'}">
+                                    ${u.enabled ? 'ENABLED' : 'DISABLED'}
+                                </button>
+                            </td>
+                            <td class="px-6 py-4">
+                                <select onchange="updateUserBackupInterval('${u.email}', ${u.enabled}, this.value)" 
+                                        class="bg-black/40 border border-outline-variant/20 px-2 py-1 text-[10px] font-mono text-on-surface focus:border-primary outline-none transition-colors uppercase">
+                                    <option value="daily" ${u.interval === 'daily' ? 'selected' : ''}>DAILY</option>
+                                    <option value="weekly" ${u.interval === 'weekly' ? 'selected' : ''}>WEEKLY</option>
+                                </select>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="font-mono text-[10px] text-on-surface">${formatBackupDate(u.last_backup_at)}</p>
+                                <p class="font-mono text-[9px] uppercase ${statusClass}">${u.last_status.toUpperCase()}</p>
+                            </td>
+                            <td class="px-6 py-4 font-mono text-[10px] text-on-surface-variant/70">
+                                ${u.last_size > 0 ? formatBackupBytes(u.last_size) : '-'}
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <button onclick="triggerUserBackupNow('${u.user_id}', '${u.email}')" 
+                                        ${isRunning ? 'disabled' : ''}
+                                        class="font-label text-[9px] tracking-wider text-primary border border-primary/30 px-3 py-1.5 hover:bg-primary hover:text-black transition-all uppercase font-bold disabled:opacity-40">
+                                    ${isRunning ? `BACKING UP (${runningTask.progress}%)` : 'BACKUP NOW'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+        
+        if (runningTask) {
+            scheduleBackupPoll(2500);
+        } else {
+            scheduleBackupPoll(30000);
+        }
+    } catch (e) {
+        console.error("LOAD_BACKUP_CONSOLE_ERROR:", e);
+        scheduleBackupPoll(30000);
+    }
+}
+
+function scheduleBackupPoll(ms) {
+    clearTimeout(backupPollInterval);
+    backupPollInterval = setTimeout(() => loadBackupConsole(), ms);
+}
+
+async function saveBackupSettings() {
+    const backupUrl = document.getElementById('cfg-backup-url').value.trim();
+    const backupKey = document.getElementById('cfg-backup-key').value.trim();
+    const retention = document.getElementById('cfg-backup-retention').value;
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                backup_server_url: backupUrl,
+                backup_server_api_key: backupKey,
+                backup_retention: retention
+            })
+        });
+        if (res.ok) {
+            await ZNodeDialog.alert("SETTINGS SAVED", "Remote backup server settings updated successfully.");
+            loadBackupConsole();
+        } else {
+            const err = await res.json();
+            await ZNodeDialog.alert("ERROR", err.error || "Failed to save settings.");
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to communicate with the server.");
+    }
+}
+
+async function testRemoteConnection() {
+    const badge = document.getElementById('remote-conn-badge');
+    badge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-primary/40 text-primary bg-primary/5 uppercase animate-pulse";
+    badge.textContent = "TESTING...";
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/test_connection', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.status === 'connected') {
+            const resp = data.response || {};
+            badge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 uppercase";
+            badge.textContent = `CONNECTED (RETENTION: ${resp.max_backups_per_target || 4})`;
+            await ZNodeDialog.alert("CONNECTION SUCCESSFUL", `Backup Server Online.\nServer: ${resp.server || 'PHP Backup Server'}\nStorage Count: ${resp.total_archives || 0} backups stored.`);
+            loadRemoteArchives();
+        } else {
+            badge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-error/40 text-error bg-error/10 uppercase";
+            badge.textContent = "OFFLINE / ERROR";
+            await ZNodeDialog.alert("CONNECTION FAILED", data.error || "Remote backup server did not respond.");
+        }
+    } catch (e) {
+        badge.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-error/40 text-error bg-error/10 uppercase";
+        badge.textContent = "FAILED";
+        await ZNodeDialog.alert("CONNECTION FAILED", "Network failure reaching backup server.");
+    }
+}
+
+async function saveServerBackupSchedule() {
+    const enabled = document.getElementById('cfg-server-enabled').value;
+    const interval = document.getElementById('cfg-server-interval').value;
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                server_backup_enabled: enabled,
+                server_backup_interval: interval
+            })
+        });
+        if (res.ok) {
+            await ZNodeDialog.alert("SCHEDULE UPDATED", "Server backup schedule successfully updated.");
+            loadBackupConsole();
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to update server backup schedule.");
+    }
+}
+
+async function triggerServerBackupNow() {
+    const btn = document.getElementById('btn-trigger-server-backup');
+    btn.disabled = true;
+    btn.textContent = 'INITIALIZING...';
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/trigger', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ target_type: 'server', target_id: 'server' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            scheduleBackupPoll(500);
+        } else {
+            await ZNodeDialog.alert("BACKUP FAILED", data.error || "Could not start server backup.");
+            btn.disabled = false;
+            btn.textContent = 'Backup Server Now';
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Backup Server Now';
+    }
+}
+
+async function toggleUserBackupPolicy(email, newEnabled, interval) {
+    try {
+        const res = await fetch('/app/admin/api/backup/user/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: email, enabled: newEnabled, interval: interval })
+        });
+        if (res.ok) {
+            loadBackupConsole();
+        }
+    } catch (e) {
+        console.error("TOGGLE_BACKUP_ERROR:", e);
+    }
+}
+
+async function updateUserBackupInterval(email, enabled, newInterval) {
+    try {
+        await fetch('/app/admin/api/backup/user/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: email, enabled: enabled, interval: newInterval })
+        });
+        loadBackupConsole();
+    } catch (e) {
+        console.error("UPDATE_INTERVAL_ERROR:", e);
+    }
+}
+
+async function enableBackupByEmail() {
+    const input = document.getElementById('quick-backup-email');
+    const intervalSelect = document.getElementById('quick-backup-interval');
+    const email = input.value.trim();
+    if (!email) return;
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/user/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: email, enabled: 1, interval: intervalSelect.value })
+        });
+        if (res.ok) {
+            input.value = '';
+            await ZNodeDialog.alert("POLICY CREATED", `Backup enabled for ${email} (${intervalSelect.value}).`);
+            loadBackupConsole();
+        } else {
+            const err = await res.json();
+            await ZNodeDialog.alert("FAILED", err.error || "Could not enable backup.");
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to communicate with the server.");
+    }
+}
+
+async function triggerUserBackupNow(userId, email) {
+    try {
+        const res = await fetch('/app/admin/api/backup/trigger', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ target_type: 'user', target_id: userId || email })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            loadBackupConsole();
+        } else {
+            await ZNodeDialog.alert("TRIGGER FAILED", data.error || "Could not trigger user backup.");
+        }
+    } catch (e) {
+        console.error("TRIGGER_USER_BACKUP_ERROR:", e);
+    }
+}
+
+function toggleSelectAllRemote(headerCb) {
+    const cbs = document.querySelectorAll('.remote-archive-cb');
+    cbs.forEach(cb => cb.checked = headerCb.checked);
+    updateRemoteBulkState();
+}
+
+function updateRemoteBulkState() {
+    const cbs = document.querySelectorAll('.remote-archive-cb');
+    const checked = Array.from(cbs).filter(cb => cb.checked);
+    const bulkBtn = document.getElementById('btn-remote-bulk-delete');
+    const countSpan = document.getElementById('remote-selected-count');
+    const selectAllCb = document.getElementById('remote-select-all');
+
+    if (countSpan) countSpan.textContent = checked.length;
+
+    if (bulkBtn) {
+        if (checked.length > 0) {
+            bulkBtn.classList.remove('hidden');
+        } else {
+            bulkBtn.classList.add('hidden');
+        }
+    }
+
+    if (selectAllCb && cbs.length > 0) {
+        selectAllCb.checked = checked.length === cbs.length;
+        selectAllCb.indeterminate = checked.length > 0 && checked.length < cbs.length;
+    }
+}
+
+async function deleteSelectedRemoteArchives() {
+    const cbs = document.querySelectorAll('.remote-archive-cb:checked');
+    const backupIds = Array.from(cbs).map(cb => cb.value);
+    if (backupIds.length === 0) return;
+
+    if (!await ZNodeDialog.confirm("DELETE SELECTED BACKUPS", `Are you sure you want to permanently delete ${backupIds.length} selected backup(s) from the remote backup repository?`)) return;
+
+    try {
+        const res = await fetch('/app/admin/api/backup/remote/delete_bulk', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ backup_ids: backupIds })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            await ZNodeDialog.alert("BACKUPS DELETED", `${data.deleted_count || backupIds.length} remote backup(s) successfully deleted.`);
+            loadRemoteArchives();
+        } else {
+            await ZNodeDialog.alert("DELETE FAILED", data.error || "Could not delete selected backups.");
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
+    }
+}
+
+async function loadRemoteArchives() {
+    const tbody = document.getElementById('remote-archives-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-on-surface-variant/40 uppercase tracking-[0.3em] animate-pulse">Querying remote backup repository...</td></tr>';
+    
+    const selectAllCb = document.getElementById('remote-select-all');
+    if (selectAllCb) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+    }
+    updateRemoteBulkState();
+
+    try {
+        const res = await fetch('/app/admin/api/backup/remote/list');
+        const data = await res.json();
+        const backups = data.backups || [];
+        
+        if (backups.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-on-surface-variant/30 uppercase tracking-[0.3em]">No remote backup archives found in storage.</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = backups.map(b => `
+            <tr class="border-t border-outline-variant/10 hover:bg-white/5 transition-all group">
+                <td class="px-4 py-4 text-center">
+                    <input type="checkbox" class="remote-archive-cb accent-primary cursor-pointer w-3.5 h-3.5" value="${b.id}" onchange="updateRemoteBulkState()">
+                </td>
+                <td class="px-6 py-4 font-mono text-[10px] text-primary uppercase font-bold tracking-wider">
+                    ${b.target_type === 'server' ? 'SERVER' : `USER (${b.target_id.slice(0, 8)}...)`}
+                </td>
+                <td class="px-6 py-4 font-mono text-[10px] text-on-surface truncate max-w-xs" title="${b.filename}">
+                    ${b.filename}
+                </td>
+                <td class="px-6 py-4 font-mono text-[10px] text-tertiary">
+                    ${formatBackupBytes(b.total_size)}
+                </td>
+                <td class="px-6 py-4 font-mono text-[9px] text-on-surface-variant/60 truncate max-w-xs select-all" title="${b.file_hash}">
+                    ${b.file_hash ? b.file_hash.slice(0, 16) + '...' : '-'}
+                </td>
+                <td class="px-6 py-4 font-mono text-[10px] text-on-surface-variant/70">
+                    ${b.created_at || '-'}
+                </td>
+                <td class="px-6 py-4 text-right flex items-center justify-end gap-2">
+                    <a href="/app/admin/api/backup/remote/download?backup_id=${b.id}" 
+                       class="font-label text-[9px] tracking-wider text-primary hover:bg-primary hover:text-black border border-primary/30 px-2.5 py-1.5 transition-all uppercase font-bold inline-block">
+                        DOWNLOAD
+                    </a>
+                    <button onclick="promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}')" 
+                            class="font-label text-[9px] tracking-wider text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2.5 py-1.5 transition-all uppercase font-bold">
+                        RESTORE
+                    </button>
+                    <button onclick="deleteRemoteArchive('${b.id}', '${b.filename}')" 
+                            class="font-label text-[9px] tracking-wider text-error/60 hover:text-error hover:bg-error/10 border border-error/20 hover:border-error/40 px-2.5 py-1.5 transition-all uppercase">
+                        DELETE
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-error uppercase tracking-[0.3em]">Failed to connect to remote backup repository.</td></tr>';
+    }
+}
+
+async function promptRemoteRestore(backupId, filename, targetType) {
+    const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${targetType})`;
+    const confirmed = await ZNodeDialog.confirm(
+        "CONFIRM RESTORE",
+        `Restoring from backup [${filename}] will replace current data for ${targetName}.\n\nRecords created after this snapshot will be replaced.\n\nDo you want to proceed?`
+    );
+    if (!confirmed) return;
+
+    const expected = "RESTORE DATA";
+    const input = await ZNodeDialog.prompt(
+        "CONFIRM RESTORE",
+        `Type "${expected}" to authorize restore:`
+    );
+    if (input !== expected) {
+        await ZNodeDialog.alert("CANCELLED", "Confirmation phrase did not match. Restore aborted.");
+        return;
+    }
+
+    try {
+        const res = await fetch('/app/admin/api/backup/remote/restore', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                backup_id: backupId,
+                target_type: targetType,
+                confirmation: input
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            await ZNodeDialog.alert("RESTORE COMPLETE", `Target [${targetName}] restored successfully.`);
+            if (targetType === 'server') {
+                window.location.reload();
+            } else {
+                loadBackupConsole();
+                loadRemoteArchives();
+            }
+        } else {
+            await ZNodeDialog.alert("RESTORE FAILED", data.error || "Restore execution rejected.");
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
+    }
+}
+
+async function deleteRemoteArchive(backupId, filename) {
+    if (!await ZNodeDialog.confirm("DELETE BACKUP", `Are you sure you want to delete backup [${filename}] from the backup server?`)) return;
+    
+    try {
+        const res = await fetch('/app/admin/api/backup/remote/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ backup_id: backupId })
+        });
+        if (res.ok) {
+            await ZNodeDialog.alert("BACKUP DELETED", `Remote backup [${filename}] deleted successfully.`);
+            loadRemoteArchives();
+        } else {
+            const err = await res.json();
+            await ZNodeDialog.alert("DELETE FAILED", err.error || "Could not delete remote archive.");
+        }
+    } catch (e) {
+        await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
+    }
+}
+
+// Initial data load and periodic polling
 if (document.getElementById('admins-table-body')) {
     refreshStats();
+    loadBackupConsole();
+    loadRemoteArchives();
     setInterval(() => {
         const query = document.getElementById('user-search-query').value;
         if (!query) refreshStats(); // Only auto-refresh if not searching

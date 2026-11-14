@@ -406,3 +406,63 @@ def api_self_wipe():
     else:
         return jsonify({"error": "Account deletion failed due to an internal error."}), 500
 
+# ─── User Backup Telemetry API ───────────────────────────────
+
+@dashboard_bp.route('/api/backup/user/status', methods=['GET'])
+def api_user_backup_status():
+    """Retrieve backup telemetry for the current authenticated user."""
+    from app.modules import db_handler
+    email = g.user.get('email', '')
+    user_id = g.user.get('user_id', '')
+    
+    cfg = db_handler.get_user_backup_config(email)
+    active_task = db_handler.get_active_backup_task('user', user_id)
+    latest_task = db_handler.get_latest_backup_task('user', user_id)
+    if not latest_task:
+        latest_task = db_handler.get_latest_backup_task('user', email)
+        
+    is_admin = db_handler.is_admin(email)
+    server_settings = db_handler.get_backup_settings() if is_admin else {}
+    global_active = db_handler.get_any_active_backup_task() if is_admin else None
+    
+    return jsonify({
+        "user_id": user_id,
+        "email": email,
+        "enabled": bool(cfg.get('enabled', 0)),
+        "interval": cfg.get('interval', 'daily'),
+        "last_backup_at": int(cfg.get('last_backup_at') or 0),
+        "last_status": cfg.get('last_status', 'never'),
+        "last_error": cfg.get('last_error', ''),
+        "last_size": int(cfg.get('last_size') or 0),
+        "last_hash": cfg.get('last_hash', ''),
+        "active_task": active_task,
+        "latest_task": latest_task,
+        "global_active_task": global_active,
+        "is_admin": is_admin,
+        "server_backup_enabled": server_settings.get('server_backup_enabled') == '1' if is_admin else False,
+        "server_backup_interval": server_settings.get('server_backup_interval', 'daily') if is_admin else None,
+        "last_server_backup_at": int(server_settings.get('last_server_backup_at') or 0) if is_admin else 0,
+        "last_server_backup_status": server_settings.get('last_server_backup_status', 'never') if is_admin else None,
+    }), 200
+
+@dashboard_bp.route('/api/backup/user/trigger', methods=['POST'])
+def api_user_backup_trigger():
+    """Trigger an immediate backup for the current user."""
+    from app.modules import db_handler, backup_manager
+    email = g.user.get('email', '')
+    user_id = g.user.get('user_id', '')
+    
+    cfg = db_handler.get_user_backup_config(email)
+    is_admin = db_handler.is_admin(email)
+    
+    if not cfg.get('enabled') and not is_admin:
+        return jsonify({"error": "Backups are not enabled for this account. Contact your administrator."}), 403
+        
+    active = db_handler.get_active_backup_task('user', user_id)
+    if active:
+        return jsonify({"status": "already_running", "task_id": active['task_id']}), 200
+        
+    task_id = backup_manager.trigger_backup_async('user', user_id)
+    return jsonify({"status": "started", "task_id": task_id}), 202
+
+

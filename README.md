@@ -1,7 +1,7 @@
 # ZeroNode
 
 > **Zero-knowledge, end-to-end encrypted personal vault.**  
-> Built for people who take data privacy seriously—powered by Flask, SQLite, and the browser's native WebCrypto API.
+> Built for people who take data privacy seriously-powered by Flask, SQLite, and the browser's native WebCrypto API.
 
 ---
 

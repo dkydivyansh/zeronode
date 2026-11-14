@@ -13,6 +13,9 @@ def create_app(config_name='dev'):
     from app.modules.db_handler import init_db
     init_db()
 
+    from app.modules.backup_manager import start_backup_scheduler
+    start_backup_scheduler()
+
     # 1. Import blueprint
     from app.dash import dashboard_bp
     from app.dash.loader import load_modules

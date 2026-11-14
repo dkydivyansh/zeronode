@@ -22,6 +22,20 @@ zeronode/
 ├── E2EE_FLOW.md                    # Cryptographic chunking & key exchange specification
 ├── PROJECT.md                      # System architecture and developer manual (this file)
 │
+├── backup-server/                  # Standalone PHP/SQLite Remote Backup Server
+│   ├── config.php                  # API authentication keys, retention limits, storage paths
+│   ├── db.php                      # SQLite PDO layer, schema auto-migration, auth guards
+│   ├── index.php                   # Diagnostic visual landing & request router
+│   ├── README.md                   # Deployment guide for PHP standalone server
+│   └── api/                        # REST API endpoints
+│       ├── init.php                # Upload session initiation & target binding
+│       ├── chunk.php               # Chunk receiver with per-chunk SHA-256 validation
+│       ├── finalize.php            # Assembly, file-level SHA-256 check, & retention pruning
+│       ├── list.php                # Query stored remote archives & telemetry
+│       ├── download.php            # Secure streaming of backup packages
+│       ├── delete.php              # Manual archive purging
+│       └── health.php              # Diagnostic node health check
+│
 ├── data/                           # User-isolated encrypted storage & master DB (gitignored)
 │   ├── server_data.db              # Master SQLite database (users, sessions, whitelist, admins)
 │   └── <user_id>/                  # Individual user vault directory
@@ -35,7 +49,8 @@ zeronode/
     ├── modules/                    # Pure Python backend engines (no Flask route decorators)
     │   ├── __init__.py
     │   ├── db_handler.py           # Master DB operations, sessions, admins, server liquidation
-    │   └── user_data.py            # Per-user E2EE filesystem & SQLite manager (UserDataManager)
+    │   ├── user_data.py            # Per-user E2EE filesystem & SQLite manager (UserDataManager)
+    │   └── backup_manager.py       # Chunked uploader, background scheduler, disaster recovery engine
     │
     ├── routes/                     # Public / unauthenticated route controllers
     │   ├── __init__.py
@@ -49,6 +64,7 @@ zeronode/
     │   └── modules/                # Self-contained dashboard feature modules
     │       ├── home/               # System overview module (identity, quota stats, quick actions)
     │       ├── drive/              # E2EE file explorer, folder trees, note editor, previewer
+    │       ├── backup/             # Vault disaster recovery, manual backups, upload restore
     │       └── admin/              # Node administration, whitelist, disk stats, system wipe
     │
     ├── static/                     # Static assets (offline self-hosted, zero external CDNs)
@@ -419,3 +435,98 @@ services:
 - [ ] **Enforce HTTPS**: Set `secure=True` on session cookies in `app/routes/auth.py` and front the container with Nginx or Caddy with TLS 1.3.
 - [ ] **Rate Limiting**: Apply reverse-proxy rate limiting (or `flask-limiter`) to `/auth/callback`, `/app/api/file/init`, and `/app/api/key/*`.
 - [x] **Strict CORS & Isolation**: Origin allowlist enforced; COOP and CORP headers set to `same-origin` on all responses.
+
+---
+
+## 12. Automated Remote Backup & Disaster Recovery Architecture
+
+ZeroNode includes an enterprise-grade, automated disaster recovery subsystem featuring offsite zero-knowledge archive replication to a dedicated PHP/SQLite backup node.
+
+### 12.1 Cryptographic & Zero-Knowledge Guarantee
+The backup architecture strictly adheres to ZeroNode's zero-knowledge blind server principles:
+- **No Plaintext Ingestion:** The backup engine never attempts to decrypt or inspect file contents.
+- **Pre-Encrypted Binary Blobs:** Backups package pre-existing AES-GCM ciphertext chunks (`<uuid>.bin`) and the user's localized database (`<user_id>.db`).
+- **Safe SQLite Snapshots:** Active SQLite databases in WAL mode are captured using SQLite Online Backup API (`src.backup(dst)`), preventing corrupted or torn pages.
+
+### 12.2 Target Granularity & Default Policies
+1. **System Server Backup:**
+   - Packages `server_data.db` (users, sessions, whitelists, administrative ranks) and manifest metadata.
+   - **Default:** Enabled, **Daily** schedule. Configurable on the Admin console (`/app/admin#backup-section`).
+2. **Individual User Vault Backups:**
+   - Packages each user's isolated vault (`<user_id>.db`, all encrypted chunks in `blobs/`, and `manifest.json`).
+   - Formatted as `<user_id>_<timestamp>.zip.bin`.
+   - **Administrators:** Enabled by default with **Daily** interval.
+   - **Standard Users:** Disabled by default; selectively enabled by email with configurable interval (`daily` or `weekly`) on the Admin page.
+
+### 12.3 3-Phase Chunked Upload with Integrity Checks
+Large vault archives are transferred using resilient chunking (2 MB blocks):
+1. **Phase 1: Initiation (`POST /api/init.php`)**
+   - Transmits `target_type`, `target_id`, `filename`, `total_size`, `chunk_size`, `total_chunks`, and overall expected SHA-256 `file_hash`.
+   - The backup node registers an `upload_sessions` row in SQLite and returns a `session_id`.
+2. **Phase 2: Chunk Transmission (`POST /api/chunk.php`)**
+   - Each chunk is transmitted with a per-chunk `X-Chunk-Hash` header (and query parameter fallback).
+   - The backup node verifies the SHA-256 checksum of the incoming chunk against `X-Chunk-Hash` before saving it to `chunks/<session_id>/chunk_<idx>.part`.
+   - Updates real-time progress (`10%` to `90%`) in `backup_tasks`.
+3. **Phase 3: Finalization & Assembly (`POST /api/finalize.php`)**
+   - Stitches all chunks in sequential order into `storage/<target_id>/<filename>`.
+   - Computes overall file SHA-256 and asserts equivalence with `expected_hash`.
+   - Cleans temporary chunk files and marks session complete.
+   - **Automated Retention Auto-Pruning:** Evaluates count of archives for the target. If count exceeds retention limit (default: past 4 archives), older archives are automatically deleted from disk and SQLite.
+
+### 12.4 Dedicated PHP Remote Backup Server (`backup-server/`)
+- Pure PHP 8.x with PDO SQLite, zero external framework dependencies.
+- Runs standalone: `php -S 0.0.0.0:8080 -t backup-server backup-server/index.php`.
+- Bearer token / `X-API-Key` authentication defined in `backup-server/config.php`.
+- Schema auto-initialization with WAL mode (`backups` and `upload_sessions` tables).
+
+### 12.5 Real-Time Telemetry & UI Integration
+- **Home Dashboard (`/app/home`):** Features a dedicated **Remote Backup Card** with live polling, visual progress bar, active upload target indicator, percentage display, last backup timestamp, size, SHA-256 checksum display, and a direct navigation link to `/app/backup`.
+- **Navigation Bar & Dedicated Backup Module (`/app/backup`):** Dedicated authenticated vault disaster recovery interface providing one-click manual backup trigger, latest vault restore, local archive upload restore, and archive ledger.
+- **Admin Console (`/app/admin`):** Comprehensive Disaster Recovery control center with remote node health tester, server backup scheduler, user policy table with toggle switches and interval selectors, and a remote archive vault table with download, restore, and on-demand purge capabilities.
+
+---
+
+### 12.6 Disaster Recovery Restore Architecture & Overwrite Safeguards
+
+ZeroNode provides full bidirectional disaster recovery, allowing users and administrators to reconstruct vaults or entire system state from remote or local archives:
+
+#### 1. Restore Modalities
+- **User Vault Remote Restore (`POST /app/backup/api/user/restore`):** Authenticated user streams their latest snapshot (or a specific `backup_id`) from the PHP backup server into local storage.
+- **User Vault File Upload Restore (`POST /app/backup/api/user/restore_upload`):** Authenticated user uploads an offline `.zip.bin` file to reconstruct their vault without remote server dependencies.
+- **Server Master Remote Restore (`POST /app/admin/api/backup/remote/restore`):** Administrators restore master `server_data.db` or specific user vaults directly from the remote repository.
+
+#### 2. Critical Overwrite Warning & Confirmation Safeguards
+Restoring an archive is a destructive operation that replaces active records. The system enforces strict multi-layered safeguards:
+- **High-Visibility Amber Callouts:** Both `/app/backup` and `/app/admin` display prominent warning notices:
+  > **CRITICAL OVERWRITE NOTICE:** Executing a restore will permanently overwrite and replace active data for the target (Server master database or User vault). Files or records created after the archive timestamp will be replaced.
+- **Explicit Confirmation Prompt:** Every restore action mandates typing the exact phrase `"RESTORE DATA"`. Any typo or mismatch aborts the operation immediately at both the client dialog and backend API gate (`HTTP 400`).
+- **Cryptographic User Segregation:** `restore_archive()` parses embedded `manifest.json` and verifies that standard users can only restore archives matching their own `user_id`, blocking cross-tenant restore attempts (`PermissionError`).
+
+#### 3. Windows-Safe SQLite Online Restoration
+Because ZeroNode maintains active SQLite connections in WAL mode, replacing database files via standard `shutil.copyfile` or `os.replace` on Windows causes `PermissionError: [WinError 32]`. The restore engine resolves this by:
+1. Extracting archive snapshots to a temporary directory.
+2. Opening an in-process SQLite connection to the snapshot and executing `src_conn.backup(dst_conn)` directly into the target database.
+3. Flushing WAL pages into the target database safely across active handles before unlinking temporary snapshot files.
+4. Extracting ciphertext chunks (`blobs/*.bin`) directly into `data/<user_id>/` with automatic byte replacement.
+
+---
+
+### 12.7 Forensic Deletion, Stale Task Healing & Bulk Archive Operations
+
+1. **Stale Task Auto-Healing (Stuck Progress Prevention):**
+   - In distributed or multi-threaded backup workflows, server restarts or network interruptions could leave a `backup_tasks` row in `running` state indefinitely (e.g. at 2%).
+   - `cleanup_stale_backup_tasks(timeout_seconds=180)` is automatically executed whenever active tasks or status telemetries are queried. Any task remaining in `running` state past the threshold is transitioned to `failed`.
+   - On server boot, `init_db()` marks all dangling `running` tasks as failed.
+   - When generating server database snapshots in `create_server_archive()`, active tasks in the temporary snapshot SQLite file are purged prior to archive compression, guaranteeing that restoring an archive never restores a stuck task into the live database.
+
+2. **Automated Remote Backup Purge on User Deletion:**
+   - When an identity is de-provisioned (via `wipe_self` or administrative `wipe_user`), `_atomic_erasure_internal()` issues a target purge request `backup_manager.delete_remote_backups_for_target(user_id)`.
+   - The remote PHP backup server permanently removes the user's `storage/<user_id>/` directory and unlinks all associated records from SQLite.
+
+3. **Remote Backup Server Liquidation on Nuclear Server Wipe:**
+   - Authorizing `nuclear_wipe_server()` triggers `backup_manager.delete_all_remote_backups()`.
+   - The remote backup server purges all user and server archives across all storage directories and truncates `backups` and `upload_sessions` tables.
+
+4. **Bulk Selection & Purge in Remote Storage Vault:**
+   - Both `/app/admin` and `/app/backup` feature bulk selection checkboxes with a master "Select All" toggle.
+   - Administrators can select multiple archives and purge them simultaneously via `POST /app/admin/api/backup/remote/delete_bulk`.

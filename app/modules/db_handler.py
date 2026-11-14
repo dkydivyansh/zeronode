@@ -58,9 +58,57 @@ def init_db():
 
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+        -- Backup System Tables
+        CREATE TABLE IF NOT EXISTS backup_settings (
+            key             TEXT PRIMARY KEY,
+            value           TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_backup_configs (
+            email           TEXT PRIMARY KEY,
+            enabled         INTEGER NOT NULL DEFAULT 0,
+            interval        TEXT NOT NULL DEFAULT 'daily',
+            last_backup_at  INTEGER DEFAULT 0,
+            last_status     TEXT DEFAULT 'never',
+            last_error      TEXT DEFAULT '',
+            last_size       INTEGER DEFAULT 0,
+            last_hash       TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS backup_tasks (
+            task_id         TEXT PRIMARY KEY,
+            target_type     TEXT NOT NULL,
+            target_id       TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            progress        INTEGER DEFAULT 0,
+            current_step    TEXT DEFAULT '',
+            started_at      INTEGER NOT NULL,
+            completed_at    INTEGER DEFAULT 0,
+            error_message   TEXT DEFAULT '',
+            backup_filename TEXT DEFAULT '',
+            backup_hash     TEXT DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_backup_tasks_target ON backup_tasks(target_id, started_at DESC);
     """)
 
     conn.commit()
+
+    # --- BACKUP SYSTEM BOOTSTRAP ---
+    default_backup_settings = {
+        'backup_server_url': os.environ.get('BACKUP_SERVER_URL', 'http://127.0.0.1:8080'),
+        'backup_server_api_key': os.environ.get('BACKUP_SERVER_API_KEY', 'zeronode_secret_backup_key_2026'),
+        'server_backup_enabled': '1',
+        'server_backup_interval': 'daily',
+        'backup_retention': '4',
+        'last_server_backup_at': '0',
+        'last_server_backup_status': 'never',
+        'last_server_backup_error': '',
+        'last_server_backup_size': '0',
+        'last_server_backup_hash': ''
+    }
+    for k, v in default_backup_settings.items():
+        conn.execute("INSERT OR IGNORE INTO backup_settings (key, value) VALUES (?, ?)", (k, str(v)))
 
     # --- ADMINISTRATIVE BOOTSTRAP ---
     admin_email = os.environ.get('ADMIN_EMAIL')
@@ -70,7 +118,23 @@ def init_db():
                      (admin_email.lower(), int(time.time())))
         conn.execute("INSERT OR IGNORE INTO admins (email, added_at) VALUES (?, ?)", 
                      (admin_email.lower(), int(time.time())))
+        # Admin backup is enabled by default with daily interval
+        conn.execute("""
+            INSERT OR IGNORE INTO user_backup_configs (email, enabled, interval)
+            VALUES (?, 1, 'daily')
+        """, (admin_email.lower(),))
         conn.commit()
+
+    # Clean up any interrupted running tasks upon boot
+    now = int(time.time())
+    conn.execute("""
+        UPDATE backup_tasks
+        SET status = 'failed',
+            error_message = 'Task interrupted by server restart',
+            completed_at = ?
+        WHERE status = 'running'
+    """, (now,))
+    conn.commit()
 
     conn.close()
 
@@ -102,6 +166,12 @@ def add_admin(email: str, requester_email: str) -> bool:
     try:
         conn.execute("INSERT INTO admins (email, added_at) VALUES (?, ?)",
                       (email.lower(), int(time.time())))
+        # Admin backup is enabled by default with daily interval
+        conn.execute("""
+            INSERT INTO user_backup_configs (email, enabled, interval)
+            VALUES (?, 1, 'daily')
+            ON CONFLICT(email) DO UPDATE SET enabled = 1
+        """, (email.lower(),))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -407,12 +477,23 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM admins WHERE email = ?", (email,))
         conn.execute("DELETE FROM whitelist WHERE email = ?", (email,))
+        conn.execute("DELETE FROM user_backup_configs WHERE email = ?", (email,))
+        conn.execute("DELETE FROM backup_tasks WHERE (target_type = 'user' AND target_id = ?) OR target_id = ?", (user_id, email))
         conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         conn.commit()
     except Exception as e:
         print(f"CRITICAL: Identity de-provisioning DB failure for {user_id}: {e}")
     finally:
         conn.close()
+
+    # 1b. Remote Backup Purge: Delete all remote backups for this user
+    try:
+        from app.modules import backup_manager
+        backup_manager.delete_remote_backups_for_target(user_id)
+        if email and email.lower() != user_id.lower():
+            backup_manager.delete_remote_backups_for_target(email)
+    except Exception as e:
+        print(f"WARN: Remote backup purge failed during erasure of {user_id}: {e}")
 
     # 2. Physical Volume Erasure (Robust Walker)
     data_dir = os.path.normpath(os.path.join(DATA_DIR, user_id))
@@ -506,6 +587,13 @@ def nuclear_wipe_server() -> bool:
             pass
 
     try:
+        # 0. Remote Backup Server Purge: Delete all remote backups on server wipe
+        try:
+            from app.modules import backup_manager
+            backup_manager.delete_all_remote_backups()
+        except Exception as e:
+            print(f"WARN: Remote backup server wipe failed: {e}")
+
         # 1. Purge Configuration (Authoritative)
         if os.path.exists(env_path):
             try: os.remove(env_path)
@@ -581,3 +669,234 @@ def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
             "size_bytes": total_size
         })
     return report
+
+
+# ─── Automated Backup & Disaster Recovery Database Cluster ────────────
+
+def get_backup_settings() -> dict:
+    """Retrieve all global backup settings as key-value dictionary."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT key, value FROM backup_settings").fetchall()
+    conn.close()
+    return {r['key']: r['value'] for r in rows}
+
+def update_backup_settings(settings: dict) -> bool:
+    """Upsert one or more global backup settings."""
+    conn = _get_conn()
+    for k, v in settings.items():
+        conn.execute("""
+            INSERT INTO backup_settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = ?
+        """, (k, str(v), str(v)))
+    conn.commit()
+    conn.close()
+    return True
+
+def get_user_backup_config(email: str) -> dict:
+    """Retrieve backup policy configuration for a specific user email."""
+    if not email:
+        return {"email": "", "enabled": 0, "interval": "daily", "last_backup_at": 0, "last_status": "never", "last_error": "", "last_size": 0, "last_hash": ""}
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM user_backup_configs WHERE email = ?", (email.lower().strip(),)).fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return {
+        "email": email,
+        "enabled": 0,
+        "interval": "daily",
+        "last_backup_at": 0,
+        "last_status": "never",
+        "last_error": "",
+        "last_size": 0,
+        "last_hash": ""
+    }
+
+def set_user_backup_config(email: str, enabled: int = 1, interval: str = 'daily') -> bool:
+    """Configure or update backup policy for a user."""
+    conn = _get_conn()
+    conn.execute("""
+        INSERT INTO user_backup_configs (email, enabled, interval)
+        VALUES (?, ?, ?)
+        ON CONFLICT(email) DO UPDATE SET enabled = ?, interval = ?
+    """, (email.lower().strip(), enabled, interval, enabled, interval))
+    conn.commit()
+    conn.close()
+    return True
+
+def get_all_user_backup_configs() -> list:
+    """Retrieve backup status for all registered users, joined with user profile info."""
+    conn = _get_conn()
+    sql = """
+        SELECT 
+            u.user_id, u.email, u.first_name, u.last_name, u.profile_photo,
+            COALESCE(b.enabled, 0) as enabled,
+            COALESCE(b.interval, 'daily') as interval,
+            COALESCE(b.last_backup_at, 0) as last_backup_at,
+            COALESCE(b.last_status, 'never') as last_status,
+            COALESCE(b.last_error, '') as last_error,
+            COALESCE(b.last_size, 0) as last_size,
+            COALESCE(b.last_hash, '') as last_hash,
+            CASE WHEN a.email IS NOT NULL THEN 1 ELSE 0 END as is_admin
+        FROM users u
+        LEFT JOIN user_backup_configs b ON LOWER(u.email) = LOWER(b.email)
+        LEFT JOIN admins a ON LOWER(u.email) = LOWER(a.email)
+        ORDER BY u.created_at ASC
+    """
+    rows = conn.execute(sql).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def create_backup_task(task_id: str, target_type: str, target_id: str) -> bool:
+    """Create a new backup task record."""
+    conn = _get_conn()
+    now = int(time.time())
+    conn.execute("""
+        INSERT OR REPLACE INTO backup_tasks (task_id, target_type, target_id, status, progress, current_step, started_at)
+        VALUES (?, ?, ?, 'running', 0, 'Initiating backup...', ?)
+    """, (task_id, target_type, target_id, now))
+    conn.commit()
+    conn.close()
+    return True
+
+def update_backup_task(task_id: str, **kwargs) -> bool:
+    """Update progress, status, or details of an active backup task."""
+    conn = _get_conn()
+    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message', 'backup_filename', 'backup_hash']
+    updates = []
+    params = []
+    for k, v in kwargs.items():
+        if k in allowed:
+            updates.append(f"{k} = ?")
+            params.append(v)
+            
+    if kwargs.get('status') in ['success', 'failed'] and 'completed_at' not in kwargs:
+        updates.append("completed_at = ?")
+        params.append(int(time.time()))
+        
+    if not updates:
+        conn.close()
+        return True
+        
+    params.append(task_id)
+    query = f"UPDATE backup_tasks SET {', '.join(updates)} WHERE task_id = ?"
+    conn.execute(query, params)
+    conn.commit()
+    conn.close()
+    return True
+
+def record_backup_result(target_type: str, target_id: str, success: bool, size: int = 0, file_hash: str = '', error: str = '') -> bool:
+    """Record the final outcome of a backup run onto user or server settings."""
+    now = int(time.time())
+    status_str = 'success' if success else 'failed'
+    conn = _get_conn()
+    
+    if target_type == 'server':
+        settings_to_update = {
+            'last_server_backup_at': str(now),
+            'last_server_backup_status': status_str,
+            'last_server_backup_error': error or '',
+            'last_server_backup_size': str(size),
+            'last_server_backup_hash': file_hash or ''
+        }
+        for k, v in settings_to_update.items():
+            conn.execute("""
+                INSERT INTO backup_settings (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = ?
+            """, (k, v, v))
+            
+    elif target_type == 'user':
+        email = None
+        if '@' in target_id:
+            email = target_id.lower().strip()
+        else:
+            u = conn.execute("SELECT email FROM users WHERE user_id = ?", (target_id,)).fetchone()
+            if u:
+                email = u['email'].lower()
+                
+        if email:
+            conn.execute("""
+                INSERT INTO user_backup_configs (email, last_backup_at, last_status, last_error, last_size, last_hash)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(email) DO UPDATE SET
+                    last_backup_at = ?,
+                    last_status = ?,
+                    last_error = ?,
+                    last_size = ?,
+                    last_hash = ?
+            """, (email, now, status_str, error, size, file_hash, now, status_str, error, size, file_hash))
+            
+    conn.commit()
+    conn.close()
+    return True
+
+def cleanup_stale_backup_tasks(timeout_seconds: int = 180) -> int:
+    """
+    STALE TASK HEALING: Automatically marks tasks in 'running' state as failed
+    if their started_at exceeds the timeout threshold. Prevents tasks from being stuck at 2% or any state.
+    """
+    now = int(time.time())
+    stale_threshold = now - timeout_seconds
+    conn = _get_conn()
+    cursor = conn.execute("""
+        UPDATE backup_tasks
+        SET status = 'failed',
+            error_message = 'Task timed out or was interrupted.',
+            completed_at = ?
+        WHERE status = 'running' AND started_at < ?
+    """, (now, stale_threshold))
+    conn.commit()
+    count = cursor.rowcount
+    conn.close()
+    return count
+
+def get_backup_task(task_id: str) -> dict | None:
+    """Retrieve details for a specific backup task ID."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM backup_tasks WHERE task_id = ?", (task_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_latest_backup_task(target_type: str, target_id: str) -> dict | None:
+    """Retrieve the most recent task for a given target."""
+    cleanup_stale_backup_tasks()
+    conn = _get_conn()
+    row = conn.execute("""
+        SELECT * FROM backup_tasks
+        WHERE target_type = ? AND target_id = ?
+        ORDER BY started_at DESC LIMIT 1
+    """, (target_type, target_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_active_backup_task(target_type: str, target_id: str) -> dict | None:
+    """Retrieve currently running task if any."""
+    cleanup_stale_backup_tasks()
+    conn = _get_conn()
+    row = conn.execute("""
+        SELECT * FROM backup_tasks
+        WHERE target_type = ? AND target_id = ? AND status = 'running'
+        ORDER BY started_at DESC LIMIT 1
+    """, (target_type, target_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_any_active_backup_task() -> dict | None:
+    """Retrieve any currently running backup task across the system."""
+    cleanup_stale_backup_tasks()
+    conn = _get_conn()
+    row = conn.execute("""
+        SELECT * FROM backup_tasks
+        WHERE status = 'running'
+        ORDER BY started_at DESC LIMIT 1
+    """, ()).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_recent_backup_tasks(limit: int = 20) -> list:
+    """Retrieve the latest backup tasks across all targets."""
+    cleanup_stale_backup_tasks()
+    conn = _get_conn()
+    rows = conn.execute("SELECT * FROM backup_tasks ORDER BY started_at DESC LIMIT ?", (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

@@ -18,3 +18,8 @@ Thumbs.db
 
 # User Encrypted Data
 data/
+backup-server/storage/
+backup-server/chunks/
+backup-server/*.db
+backup-server/*.db-wal
+backup-server/*.db-shm
