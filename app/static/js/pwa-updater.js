@@ -25,6 +25,29 @@
         return;
       }
 
+      // Proactively purge old caches and sanitize any leaked /api/ endpoints
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => {
+            if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.0') {
+              console.log('[PWA] Purging obsolete cache store:', key);
+              caches.delete(key);
+            } else {
+              caches.open(key).then((cache) => {
+                cache.keys().then((requests) => {
+                  requests.forEach((req) => {
+                    if (req.url.includes('/api/')) {
+                      console.log('[PWA] Sanitizing stale cached API entry:', req.url);
+                      cache.delete(req);
+                    }
+                  });
+                });
+              });
+            }
+          });
+        });
+      }
+
       try {
         // Register root service worker
         const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -121,14 +144,7 @@
     notifyUpdateReady(worker) {
       PWA.updateAvailable = true;
 
-      // 1. Reveal floating update banner
-      const banner = document.getElementById('pwa-update-banner');
-      if (banner) {
-        banner.classList.remove('hidden');
-        banner.classList.add('flex');
-      }
-
-      // 2. Reveal nav buttons if present
+      // Reveal nav buttons
       const navBtn = document.getElementById('pwa-update-nav-btn');
       if (navBtn) {
         navBtn.classList.remove('hidden');
@@ -141,19 +157,39 @@
         mobileBtn.classList.add('flex');
       }
 
-      // Log system notice
-      console.log('⚡ [PWA] SYSTEM UPDATE READY. Prompting user to reload.');
+      // If user chose 'LATER' during this session, don't nag with floating banner
+      if (sessionStorage.getItem('znode_pwa_dismissed') === '1') {
+        return;
+      }
+
+      const banner = document.getElementById('pwa-update-banner');
+      if (banner) {
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+      }
+
+      console.log('⚡ [PWA] Client app shell update ready.');
+    },
+
+    dismissUpdate() {
+      sessionStorage.setItem('znode_pwa_dismissed', '1');
+      const banner = document.getElementById('pwa-update-banner');
+      if (banner) {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }
     },
 
     /**
      * Tell the waiting service worker to skip waiting and activate immediately
      */
     applyUpdate() {
+      sessionStorage.removeItem('znode_pwa_dismissed');
       const banner = document.getElementById('pwa-update-banner');
       if (banner) {
         const btn = banner.querySelector('button');
         if (btn) {
-          btn.innerHTML = `<span class="inline-block animate-spin mr-2">⟳</span> REFRESHING...`;
+          btn.innerHTML = `<span class="inline-block animate-spin mr-2">⟳</span> ACTIVATING...`;
           btn.disabled = true;
         }
       }

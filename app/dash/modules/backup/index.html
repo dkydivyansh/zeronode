@@ -445,7 +445,7 @@ const ZNodeBackupModule = {
 
     async fetchUserStatus() {
         try {
-            const res = await fetch('/app/backup/api/user/status');
+            const res = await fetch('/app/backup/api/user/status?t=' + Date.now(), { cache: 'no-store' });
             if (!res.ok) return;
             const data = await res.json();
 
@@ -521,6 +521,10 @@ const ZNodeBackupModule = {
                 if (btnDownload) btnDownload.classList.remove('hidden');
                 if (btnRestore) btnRestore.classList.remove('hidden');
                 if (restoreNotice) restoreNotice.classList.remove('hidden');
+            } else {
+                if (btnDownload) btnDownload.classList.add('hidden');
+                if (btnRestore) btnRestore.classList.add('hidden');
+                if (restoreNotice) restoreNotice.classList.add('hidden');
             }
 
             if (!data.enabled && !this.isAdmin) {
@@ -532,7 +536,7 @@ const ZNodeBackupModule = {
                     btnTrigger.disabled = true;
                     btnTrigger.textContent = "Disabled";
                 }
-            } else if (data.last_status === 'success') {
+            } else if (data.last_status === 'success' && data.last_backup_at > 0) {
                 badgeEl.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 uppercase";
                 badgeEl.textContent = "UP TO DATE";
                 statusEl.textContent = "SUCCESS";
@@ -543,10 +547,10 @@ const ZNodeBackupModule = {
                 statusEl.textContent = "FAILED";
                 statusEl.className = "font-mono text-sm uppercase text-error font-semibold";
             } else {
-                badgeEl.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-primary/30 text-primary uppercase";
-                badgeEl.textContent = "SCHEDULED";
-                statusEl.textContent = "READY";
-                statusEl.className = "font-mono text-sm uppercase text-on-surface font-semibold";
+                badgeEl.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-outline-variant/30 text-on-surface-variant/40 uppercase";
+                badgeEl.textContent = "NO BACKUP";
+                statusEl.textContent = "NEVER";
+                statusEl.className = "font-mono text-sm uppercase text-on-surface-variant/50 font-semibold";
             }
 
             this.scheduleNext(15000);
@@ -609,7 +613,7 @@ const ZNodeBackupModule = {
     async loadAdminConsole() {
         if (!this.isAdmin) return;
         try {
-            const res = await fetch('/app/admin/api/backup/status');
+            const res = await fetch('/app/admin/api/backup/status?t=' + Date.now(), { cache: 'no-store' });
             if (!res.ok) return;
             const data = await res.json();
 
@@ -993,7 +997,7 @@ const ZNodeBackupModule = {
         this.updateRemoteBulkState();
 
         try {
-            const res = await fetch('/app/admin/api/backup/remote/list');
+            const res = await fetch('/app/admin/api/backup/remote/list?t=' + Date.now(), { cache: 'no-store' });
             const data = await res.json();
             const backups = data.backups || [];
             if (backups.length === 0) {

@@ -28,6 +28,10 @@ class Manifest(ModuleManifest):
 
         # User Backup Status
         if path == "/api/user/status":
+            try:
+                backup_manager.reconcile_all_backup_records()
+            except Exception:
+                pass
             cfg = db_handler.get_user_backup_config(email)
             active_task = db_handler.get_active_backup_task('user', user_id)
             active_restore = db_handler.get_active_restore_task('user', user_id)

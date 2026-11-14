@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, redirect, send_from_directory, jsonify, current_app, make_response
 from app.routes.auth import get_current_user
+from app.config import Config
 
 client_bp = Blueprint('client', __name__, template_folder='../templates')
 
@@ -47,8 +48,8 @@ def api_version():
     """Version endpoint for Service Worker and PWA updater."""
     return jsonify({
         "status": "success",
-        "version": "1.1.0",
-        "build": "20261114.pwa",
-        "name": "ZeroNode"
+        "version": Config.APP_VERSION,
+        "build": Config.BUILD_ID,
+        "name": Config.APP_NAME
     })
 

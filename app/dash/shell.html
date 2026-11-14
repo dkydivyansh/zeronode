@@ -86,6 +86,7 @@
     }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ now_ts }}"/>
+<script src="{{ url_for('static', filename='js/page-transition.js') }}?v={{ now_ts }}"></script>
 <script src="{{ url_for('static', filename='js/wordlist.js') }}?v={{ now_ts }}"></script>
 <script src="{{ url_for('static', filename='js/pdf.min.js') }}?v={{ now_ts }}"></script>
 <script>
@@ -97,23 +98,38 @@
 </head>
 <body class="font-body selection:bg-primary selection:text-on-primary min-h-screen">
 
+<!-- Page Transition Dot Loader Overlay -->
+<div id="page-transition-loader" class="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center transition-opacity duration-200 opacity-0 pointer-events-none select-none">
+    <div class="flex flex-col items-center gap-3">
+        <div class="dot-loader-container flex items-center gap-2">
+            <span class="dot-loader-item"></span>
+            <span class="dot-loader-item"></span>
+            <span class="dot-loader-item"></span>
+        </div>
+        <div class="flex items-center gap-1 font-mono text-[9px] tracking-[0.3em] text-on-surface-variant/40 uppercase mt-1">
+            <span>LOADING</span>
+            <span class="inline-block animate-pulse text-primary font-bold">_</span>
+        </div>
+    </div>
+</div>
+
 <!-- PWA System Update Floating Notification -->
 <div id="pwa-update-banner" class="hidden fixed top-4 right-4 left-4 md:left-auto md:w-96 z-[9990] bg-[#121212] border border-primary/40 p-4 shadow-2xl flex-col gap-3 backdrop-blur-md">
     <div class="flex items-start justify-between">
         <div class="flex items-center gap-2">
             <span class="inline-block w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
-            <span class="font-headline text-xs tracking-widest text-[#e5e5e5] uppercase">SYSTEM UPDATE READY</span>
+            <span class="font-headline text-xs tracking-widest text-[#e5e5e5] uppercase">APPLICATION UPDATE READY</span>
         </div>
-        <button onclick="document.getElementById('pwa-update-banner').classList.add('hidden')" class="text-on-surface-variant/40 hover:text-primary transition-colors text-xs font-mono">✕</button>
+        <button onclick="ZeroNodePWA.dismissUpdate()" class="text-on-surface-variant/40 hover:text-primary transition-colors text-xs font-mono">✕</button>
     </div>
     <p class="font-label text-[11px] text-[#a0a0a0] leading-relaxed uppercase">
-        A new application version and updated assets have been verified and cached locally.
+        A new client version (<span class="text-primary font-mono font-bold">{{ app_version }}</span>) and updated offline app shell have been cached. Reload tab to activate.
     </p>
     <div class="flex items-center gap-3 pt-1">
         <button onclick="ZeroNodePWA.applyUpdate()" class="flex-1 bg-primary text-black font-label text-[10px] tracking-widest py-2 px-3 uppercase font-bold hover:bg-white transition-all text-center">
             RELOAD NOW
         </button>
-        <button onclick="document.getElementById('pwa-update-banner').classList.add('hidden')" class="font-label text-[10px] tracking-widest py-2 px-3 text-on-surface-variant/60 hover:text-white uppercase">
+        <button onclick="ZeroNodePWA.dismissUpdate()" class="font-label text-[10px] tracking-widest py-2 px-3 text-on-surface-variant/60 hover:text-white uppercase">
             LATER
         </button>
     </div>
@@ -309,7 +325,10 @@
                     {% endif %}
                     <span class="font-label text-[9px] md:text-[10px] tracking-wider text-on-surface-variant truncate max-w-[55px] lg:max-w-none">{{ user.first_name | upper }}</span>
                 </div>
-                <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden 2xl:block">dkydivyansh.com</span>
+                <div class="hidden xl:flex items-center gap-2">
+                    <span class="font-mono text-[9px] tracking-wider text-primary/60 border border-primary/20 px-2 py-0.5 uppercase">{{ app_version }}</span>
+                    <span class="font-label text-[10px] tracking-widest text-on-surface-variant/20 hidden 2xl:block">dkydivyansh.com</span>
+                </div>
             </div>
         </div>
     </div>
@@ -326,7 +345,10 @@
             </div>
             {% endif %}
             <div class="flex flex-col">
-                <span class="font-headline text-sm tracking-widest text-on-surface uppercase">{{ user.first_name }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="font-headline text-sm tracking-widest text-on-surface uppercase">{{ user.first_name }}</span>
+                    <span class="font-mono text-[8px] tracking-wider text-primary/70 border border-primary/20 px-1.5 py-0.2 uppercase">{{ app_version }}</span>
+                </div>
                 <span class="font-label text-[10px] tracking-widest text-on-surface-variant/40">dkydivyansh.com</span>
             </div>
         </div>

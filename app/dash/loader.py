@@ -1,5 +1,5 @@
 """
-Module Loader for Aetheris Vault Dashboard.
+Module Loader for ZeroNode Dashboard.
 
 Registration works by explicitly listing module names in REGISTERED_MODULES.
 Each module must have a manifest.py declaring its metadata and routes.

@@ -7,8 +7,21 @@ import shutil
 DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data'))
 DB_PATH = os.path.join(DATA_DIR, 'server_data.db')
 
+_is_wiping = False
+
+def is_server_wiping() -> bool:
+    """Returns True if the server is currently undergoing a complete reset."""
+    return _is_wiping
+
+def set_server_wiping(wiping: bool = True):
+    """Sets the server wiping state flag."""
+    global _is_wiping
+    _is_wiping = wiping
+
 def _get_conn():
     """Get a new database connection with row_factory for dict-like access."""
+    if _is_wiping:
+        raise sqlite3.OperationalError("Server database is currently being reset.")
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -220,10 +233,10 @@ def remove_admin(email: str, requester_email: str) -> bool:
         return False
         
     conn = _get_conn()
-    # 1. Purge administrative privileges
+    # 1. Revoke administrative privileges
     cursor = conn.execute("DELETE FROM admins WHERE email = ?", (email.lower(),))
     
-    # 2. Authoritatively terminate all active sessions for this user ID
+    # 2. Terminate all active sessions for this user ID
     conn.execute("DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email = ?)", (email.lower(),))
     
     conn.commit()
@@ -265,10 +278,10 @@ def add_to_whitelist(email: str) -> bool:
 def remove_from_whitelist(email: str) -> bool:
     """Remove an email from the whitelist."""
     conn = _get_conn()
-    # 1. Purge whitelist access
+    # 1. Remove from whitelist
     cursor = conn.execute("DELETE FROM whitelist WHERE email = ?", (email.lower(),))
     
-    # 2. Authoritatively terminate all active sessions for this user ID
+    # 2. Terminate all active sessions for this user ID
     conn.execute("DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email = ?)", (email.lower(),))
     
     conn.commit()
@@ -427,7 +440,7 @@ def destroy_session(token: str) -> bool:
         conn.commit()
         return cursor.rowcount > 0
     except sqlite3.OperationalError:
-        # DB or table already purged (Expected during liquidation)
+        # DB or table already cleaned up
         return False
     finally:
         if conn: conn.close()
@@ -500,12 +513,12 @@ def get_user_storage_report() -> list:
 
 def _atomic_erasure_internal(user_id: str, email: str) -> bool:
     """
-    INTERNAL_ERASURE_ENGINE: Performs the absolute physical and database purge of an identity.
-    Uses robust retry logic and authoritative error handlers for Windows file-lock recovery.
+    Deletes user records and files permanently from database and disk.
+    Uses robust retry logic for Windows file locks.
     """
     conn = _get_conn()
     try:
-        # 1. Atomic Database Purge
+        # 1. Database Deletion
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM admins WHERE email = ?", (email,))
         conn.execute("DELETE FROM whitelist WHERE email = ?", (email,))
@@ -514,24 +527,24 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
         conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         conn.commit()
     except Exception as e:
-        print(f"CRITICAL: Identity de-provisioning DB failure for {user_id}: {e}")
+        print(f"Error deleting user from database for {user_id}: {e}")
     finally:
         conn.close()
 
-    # 1b. Remote Backup Purge: Delete all remote backups for this user
+    # 1b. Remote Backup Cleanup: Delete all remote backups for this user
     try:
         from app.modules import backup_manager
         backup_manager.delete_remote_backups_for_target(user_id)
         if email and email.lower() != user_id.lower():
             backup_manager.delete_remote_backups_for_target(email)
     except Exception as e:
-        print(f"WARN: Remote backup purge failed during erasure of {user_id}: {e}")
+        print(f"Warning: Remote backup cleanup failed during deletion of {user_id}: {e}")
 
-    # 2. Physical Volume Erasure (Robust Walker)
+    # 2. Disk Storage Cleanup
     data_dir = os.path.normpath(os.path.join(DATA_DIR, user_id))
     
     def force_remove_readonly(func, path, excinfo):
-        """Authoritative error handler to break file locks/readonly attributes."""
+        """Error handler to remove readonly attributes and retry deletion."""
         import stat
         try:
             os.chmod(path, stat.S_IWRITE)
@@ -547,10 +560,10 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
             try:
                 shutil.rmtree(data_dir, onerror=force_remove_readonly)
                 if not os.path.exists(data_dir):
-                    return True # ERASURE_SUCCESSFUL
+                    return True # Deletion successful
             except Exception as e:
                 if attempt == 4:
-                    print(f"CRITICAL: Physical volume erasure final failure for {user_id}: {e}")
+                    print(f"Warning: Physical directory deletion failed for {user_id}: {e}")
             time.sleep(0.5) # Wait for transient locks/GC to release
             
     return not os.path.exists(data_dir) # True if gone, False if still exists
@@ -558,51 +571,49 @@ def _atomic_erasure_internal(user_id: str, email: str) -> bool:
 
 def wipe_self(user_id: str) -> bool:
     """
-    SELF_IDENTITY_ERASURE: Authoritatively de-provisions the current identity and purges its data.
+    Deletes the current user account and files permanently.
     """
     conn = _get_conn()
     user = conn.execute("SELECT email FROM users WHERE user_id = ?", (user_id,)).fetchone()
     conn.close()
     
     if not user:
-        return False # IDENTITY_RESOLUTION_FAILURE
+        return False
         
     return _atomic_erasure_internal(user_id, user['email'].lower())
 
 def wipe_user(user_id: str, requester_email: str) -> bool:
     """
-    ADMIN_ERASURE_PROTOCOL: Physically de-provisions an identity and purges its data volume.
+    Deletes a user account and associated files permanently.
     """
     conn = _get_conn()
     try:
-        # 1. Self-Erasure Prevention Gate (for ADMIN only)
+        # 1. Self-deletion prevention (administrators cannot delete themselves via this endpoint)
         requester = conn.execute("SELECT user_id FROM users WHERE email = ?", (requester_email.lower(),)).fetchone()
         if requester and requester['user_id'] == user_id:
-            return False # AUTHORIZATION_DENIED: Admin cannot wipe themselves via this protocol.
+            return False
 
-        # 2. Identify Target Identity
+        # 2. Identify target user
         target = conn.execute("SELECT email FROM users WHERE user_id = ?", (user_id,)).fetchone()
         if not target:
-            return False # IDENTITY_RESOLUTION_FAILURE: Remote identity not found.
+            return False
 
         target_email = target['email'].lower()
-        conn.close() # Close to allow internal atomic erasure
+        conn.close()
 
-        # 3. Perform Absolute Purge
+        # 3. Perform permanent deletion
         return _atomic_erasure_internal(user_id, target_email)
     except Exception as e:
-        print(f"CRITICAL: De-provisioning failure gate for {user_id}: {e}")
+        print(f"Error during account deletion for {user_id}: {e}")
         return False
     finally:
-        # Check if already closed
         try: conn.close()
         except: pass
 
 def nuclear_wipe_server() -> bool:
     """
-    NUCLEAR_SYSTEM_LIQUIDATION: Physically de-provisions the entire server infrastructure.
-    Purges .env, master database, and the entire data/ root.
-    Harnessed with robust Windows file-lock retry logic.
+    Permanently resets the entire server infrastructure, removing configuration,
+    database records, and stored user files.
     """
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
     env_path = os.path.normpath(os.path.join(root_dir, '.env'))
@@ -610,7 +621,7 @@ def nuclear_wipe_server() -> bool:
     db_path = os.path.normpath(DB_PATH)
     
     def force_remove_readonly(func, path, excinfo):
-        """Authoritative error handler to break file locks/readonly attributes."""
+        """Error handler to remove readonly attributes and retry deletion."""
         import stat
         try:
             os.chmod(path, stat.S_IWRITE)
@@ -619,52 +630,49 @@ def nuclear_wipe_server() -> bool:
             pass
 
     try:
-        # 0. Remote Backup Server Purge: Delete all remote backups on server wipe
+        # 0. Remote Backup Server: Delete all remote backups on server wipe
         try:
             from app.modules import backup_manager
             backup_manager.delete_all_remote_backups()
         except Exception as e:
-            print(f"WARN: Remote backup server wipe failed: {e}")
+            print(f"Warning: Remote backup cleanup failed during server reset: {e}")
 
-        # 1. Purge Configuration (Authoritative)
+        # 1. Delete Configuration
         if os.path.exists(env_path):
             try: os.remove(env_path)
-            except Exception as e: print(f"DEBUG: ENV purge failure: {e}")
+            except Exception as e: print(f"Debug: .env deletion error: {e}")
             
-        # 2. Purge User Data Volumes (Robust Walker)
+        # 2. Delete Stored User Data
         if os.path.exists(data_dir):
-            for _ in range(3): # Authoritative Retry Loop
+            for _ in range(3):
                 try:
                     shutil.rmtree(data_dir, onerror=force_remove_readonly)
                     if not os.path.exists(data_dir): break
                 except:
-                    time.sleep(0.5) # Wait for transient locks to release
+                    time.sleep(0.5)
             
-        # 3. Purge Master Database (Force)
+        # 3. Delete Master Database
         if os.path.exists(db_path):
             try: os.remove(db_path)
             except: pass
             
-        # 4. Authoritative Shutdown Sequence
-        # We exit the process to prevent any further DB operations or ghost-requests.
-        # Process termination will release any final locks on remaining files.
-        print("SYSTEM_LIQUIDATION_PROTOCOL_COMMITTED // SHUTTING DOWN")
+        # 4. Process Shutdown
+        print("Server reset completed. Shutting down process.")
         import threading
         def delayed_shutdown():
-            time.sleep(1.5) # Grant enough time for the final API response to reach the client
+            time.sleep(1.5)
             os._exit(0)
             
         threading.Thread(target=delayed_shutdown, daemon=True).start()
             
         return True
     except Exception as e:
-        print(f"CRITICAL: System liquidation failure node: {e}")
-        # Even if data_dir fails, we've likely purged .env/db, marking the system as de-provisioned.
+        print(f"Error during server reset: {e}")
         return True 
 
 def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
     """
-    FORENSIC_USER_AUDIT: Retrieves storage telemetry for specific identities with filtering and limits.
+    Retrieves storage metrics and user accounts with filtering and pagination.
     """
     conn = _get_conn()
     query = "SELECT user_id, email, first_name, last_name, profile_photo FROM users"
@@ -703,7 +711,7 @@ def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
     return report
 
 
-# ─── Automated Backup & Disaster Recovery Database Cluster ────────────
+# ─── Automated Backup & Restore Database Operations ──────────────────
 
 def get_backup_settings() -> dict:
     """Retrieve all global backup settings as key-value dictionary."""
@@ -866,6 +874,77 @@ def record_backup_result(target_type: str, target_id: str, success: bool, size: 
     conn.commit()
     conn.close()
     return True
+
+def reset_backup_result(target_type: str, target_id: str) -> bool:
+    """Clear last backup metadata when an archive is deleted, missing, or purged remotely."""
+    if _is_wiping:
+        return False
+    try:
+        conn = _get_conn()
+    except Exception:
+        return False
+    try:
+        if target_type == 'server':
+            keys = ['last_server_backup_at', 'last_server_backup_status', 'last_server_backup_error', 'last_server_backup_size', 'last_server_backup_hash']
+            for k in keys:
+                conn.execute("""
+                    INSERT INTO backup_settings (key, value) VALUES (?, '')
+                    ON CONFLICT(key) DO UPDATE SET value = ''
+                """, (k,))
+                if k in ('last_server_backup_at', 'last_server_backup_size'):
+                    conn.execute("UPDATE backup_settings SET value = '0' WHERE key = ?", (k,))
+                elif k == 'last_server_backup_status':
+                    conn.execute("UPDATE backup_settings SET value = 'never' WHERE key = ?", (k,))
+        elif target_type == 'user':
+            email = None
+            if '@' in target_id:
+                email = target_id.lower().strip()
+            else:
+                u = conn.execute("SELECT email FROM users WHERE user_id = ?", (target_id,)).fetchone()
+                if u:
+                    email = u['email'].lower().strip()
+            if email:
+                conn.execute("""
+                    UPDATE user_backup_configs
+                    SET last_backup_at = 0, last_status = 'never', last_error = '', last_size = 0, last_hash = ''
+                    WHERE email = ?
+                """, (email,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        try: conn.close()
+        except Exception: pass
+        return False
+
+def update_user_backup_config(email: str, **kwargs) -> bool:
+    """Update specific fields in user_backup_configs table."""
+    if _is_wiping or not email:
+        return False
+    try:
+        conn = _get_conn()
+    except Exception:
+        return False
+    try:
+        allowed = ['enabled', 'interval', 'last_backup_at', 'last_status', 'last_error', 'last_size', 'last_hash']
+        updates = []
+        params = []
+        for k, v in kwargs.items():
+            if k in allowed:
+                updates.append(f"{k} = ?")
+                params.append(v)
+        if not updates:
+            conn.close()
+            return True
+        params.append(email.lower().strip())
+        conn.execute(f"UPDATE user_backup_configs SET {', '.join(updates)} WHERE email = ?", params)
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        try: conn.close()
+        except Exception: pass
+        return False
 
 def cleanup_stale_backup_tasks(timeout_seconds: int = 900) -> int:
     """

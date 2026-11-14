@@ -24,7 +24,16 @@ def enforce_auth():
 def inject_modules():
     """Inject loaded modules globally into all dashboard templates."""
     import time
-    return dict(app_modules=get_loaded_modules(), now_ts=int(time.time()))
+    from app.config import Config
+    raw_ver = str(Config.APP_VERSION or '1.2.0')
+    app_ver = f"v{raw_ver}" if not raw_ver.startswith("v") else raw_ver
+    return dict(
+        app_modules=get_loaded_modules(), 
+        now_ts=int(time.time()), 
+        app_version=app_ver,
+        app_name=Config.APP_NAME,
+        build_id=Config.BUILD_ID
+    )
 
 
 from flask import send_file, request, jsonify, stream_with_context, Response, current_app
@@ -442,15 +451,20 @@ def api_self_wipe():
     else:
         return jsonify({"error": "Account deletion failed due to an internal error."}), 500
 
-# ─── User Backup Telemetry API ───────────────────────────────
+# ─── User Backup Status API ──────────────────────────────────
 
 @dashboard_bp.route('/api/backup/user/status', methods=['GET'])
 def api_user_backup_status():
-    """Retrieve backup telemetry for the current authenticated user."""
-    from app.modules import db_handler
+    """Retrieve backup status for the current authenticated user."""
+    from app.modules import db_handler, backup_manager
     email = g.user.get('email', '')
     user_id = g.user.get('user_id', '')
     
+    try:
+        backup_manager.reconcile_all_backup_records()
+    except Exception:
+        pass
+
     cfg = db_handler.get_user_backup_config(email)
     active_task = db_handler.get_active_backup_task('user', user_id)
     active_restore = db_handler.get_active_restore_task('user', user_id)

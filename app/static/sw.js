@@ -1,9 +1,9 @@
 /**
  * ZeroNode - Service Worker & Self-Updater
- * Cache Version: v1.1.0
+ * Cache Version: v1.2.0
  */
 
-const CACHE_VERSION = 'v1.1.0';
+const CACHE_VERSION = 'v1.2.0';
 const CACHE_NAME = `zeronode-${CACHE_VERSION}`;
 
 // Pre-cached core app shell assets
@@ -18,6 +18,7 @@ const PRECACHE_ASSETS = [
   '/static/js/drive.js',
   '/static/js/backup_live.js',
   '/static/js/pwa-updater.js',
+  '/static/js/page-transition.js',
   '/static/vendor/marked.min.js',
   '/static/vendor/turndown.js',
   '/static/icon.ico',
@@ -67,6 +68,22 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
+    }).then(async () => {
+      // Purge any accidental /api/ keys that may have entered the cache
+      try {
+        const currentCache = await caches.open(CACHE_NAME);
+        const keys = await currentCache.keys();
+        await Promise.all(
+          keys.map((k) => {
+            if (k.url.includes('/api/')) {
+              console.log('[SW] Purging leaked API request from cache:', k.url);
+              return currentCache.delete(k);
+            }
+          })
+        );
+      } catch (err) {
+        console.debug('[SW] Cache purge cleanup skipped:', err.message);
+      }
     }).then(() => {
       console.log(`[SW] Claiming clients for ${CACHE_VERSION}`);
       return self.clients.claim();
@@ -115,17 +132,22 @@ self.addEventListener('fetch', (event) => {
 
   const pathname = url.pathname;
 
-  // STRICT BYPASS: Never intercept API calls, dynamic payloads, or auth endpoints
+  // STRICT BYPASS: Never intercept any API calls, dynamic payloads, web sockets, or auth endpoints
   const isBypass = 
-    pathname.startsWith('/app/api/') ||
-    pathname.startsWith('/api/') ||
+    pathname.includes('/api/') ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/ws/') ||
+    pathname.includes('/events') ||
+    pathname.includes('/chunk') ||
+    pathname.includes('/download') ||
+    pathname.includes('/stream') ||
+    pathname.includes('/status') ||
     req.headers.has('range') ||
-    pathname.includes('/chunk');
+    url.searchParams.has('nocache') ||
+    url.searchParams.has('t');
 
   if (isBypass) {
-    // Let browser network stack handle directly
+    // Let browser network stack handle directly without CacheStorage intervention
     return;
   }
 
@@ -182,18 +204,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default: Cache First with Network Fallback
-  event.respondWith(
-    caches.match(req).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-      return fetch(req).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const clone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return networkResponse;
-      });
-    })
-  );
+  // For any other GET request (e.g. dynamic non-static resources), do NOT touch CacheStorage
+  return;
 });
-

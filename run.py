@@ -2,14 +2,15 @@ from app import create_app
 import os
 
 # Load .env file manually so run.py sees FLASK_ENV before app creation
-_env_path = os.path.join(os.path.dirname(__file__), 'data', '.env')
-if os.path.isfile(_env_path):
-    with open(_env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, _, val = line.partition('=')
-                os.environ.setdefault(key.strip(), val.strip())
+_root_dir = os.path.dirname(__file__)
+for _env_path in [os.path.join(_root_dir, '.env'), os.path.join(_root_dir, 'data', '.env')]:
+    if os.path.isfile(_env_path):
+        with open(_env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, _, val = line.partition('=')
+                    os.environ.setdefault(key.strip(), val.strip())
 
 env = os.environ.get('FLASK_ENV', 'dev')
 app = create_app(env)

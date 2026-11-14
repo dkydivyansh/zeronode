@@ -98,6 +98,10 @@ class Manifest(ModuleManifest):
 
         # ─── BACKUP MANAGEMENT API CLUSTER ─────────────────────────────
         if path == "/api/backup/status":
+            try:
+                backup_manager.reconcile_all_backup_records()
+            except Exception:
+                pass
             return jsonify({
                 "settings": db_handler.get_backup_settings(),
                 "user_configs": db_handler.get_all_user_backup_configs(),
@@ -286,9 +290,9 @@ class Manifest(ModuleManifest):
     def _render_home(self, module_name):
         manager = get_user_manager()
         
-        # Formal telemetry summary for server-side render
+        # System status summary for server-side render
         stats = {
-            "security_state": "NOMINAL",
+            "security_state": "Active",
             "server_drive": db_handler.get_server_drive_info(),
             "last_sweep": time.strftime("%Y-%m-%d %H:%M:%S")
         }

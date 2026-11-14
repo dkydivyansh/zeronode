@@ -14,7 +14,7 @@
 {% set masked_email = local[:2] ~ '***' ~ local[-1:] ~ '@' ~ domain if local|length > 3 else local[:1] ~ '***@' ~ domain %}
 
 <div class="px-4 md:px-8 pt-12">
-    <!-- Welcome -->
+    <!-- Welcome Header -->
     <div class="mb-12">
         <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
             Welcome, {{ user.first_name }}.
@@ -273,7 +273,7 @@
         
         async fetchBackupStatus() {
             try {
-                const res = await fetch('/app/api/backup/user/status');
+                const res = await fetch('/app/api/backup/user/status?t=' + Date.now(), { cache: 'no-store' });
                 if (!res.ok) return;
                 const data = await res.json();
                 
@@ -376,7 +376,7 @@
                         triggerBtn.disabled = true;
                         triggerBtn.textContent = "Disabled";
                     }
-                } else if (data.last_status === 'success') {
+                } else if (data.last_status === 'success' && data.last_backup_at > 0) {
                     badgeEl.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 uppercase";
                     badgeEl.textContent = "UP TO DATE";
                     statusVal.textContent = "SUCCESS";
@@ -390,10 +390,10 @@
                         statusVal.title = data.last_error;
                     }
                 } else {
-                    badgeEl.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-primary/30 text-primary uppercase";
-                    badgeEl.textContent = "SCHEDULED";
-                    statusVal.textContent = "READY";
-                    statusVal.className = "font-semibold uppercase text-on-surface";
+                    badgeEl.className = "font-label text-[9px] px-2.5 py-0.5 tracking-wider border border-outline-variant/30 text-on-surface-variant/50 uppercase";
+                    badgeEl.textContent = "NO BACKUP";
+                    statusVal.textContent = "NEVER";
+                    statusVal.className = "font-semibold uppercase text-on-surface-variant/50";
                 }
                 
                 this.scheduleNext(15000);

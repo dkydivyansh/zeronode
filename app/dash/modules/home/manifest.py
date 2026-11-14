@@ -9,7 +9,7 @@ _template_dir = os.path.dirname(__file__)
 
 class Manifest(ModuleManifest):
     name        = "Home"
-    description = "Primary dashboard home screen showing user identity and vault status."
+    description = "Primary dashboard home screen showing user identity and storage status."
     routes      = ["/"]   # mounts at /app/home
 
     def get_view(self, module_name: str, **kwargs):

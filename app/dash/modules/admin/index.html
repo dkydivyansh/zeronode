@@ -604,7 +604,7 @@ function formatBackupDate(ts) {
 
 async function loadBackupConsole() {
     try {
-        const res = await fetch('/app/admin/api/backup/status');
+        const res = await fetch('/app/admin/api/backup/status?t=' + Date.now(), { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         
@@ -666,7 +666,7 @@ async function loadBackupConsole() {
             }
         }
         
-        // 3. Render User Vault Backup Policies Table
+        // 3. Render User Backup Policies Table
         const userConfigs = data.user_configs || [];
         const tbody = document.getElementById('user-backups-tbody');
         if (tbody) {
@@ -997,7 +997,7 @@ async function loadRemoteArchives() {
     updateRemoteBulkState();
 
     try {
-        const res = await fetch('/app/admin/api/backup/remote/list');
+        const res = await fetch('/app/admin/api/backup/remote/list?t=' + Date.now(), { cache: 'no-store' });
         const data = await res.json();
         const backups = data.backups || [];
         
