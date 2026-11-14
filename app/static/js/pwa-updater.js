@@ -29,7 +29,7 @@
       if ('caches' in window) {
         caches.keys().then((keys) => {
           keys.forEach((key) => {
-            if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.1') {
+            if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.2') {
               console.log('[PWA] Clearing obsolete cache store:', key);
               caches.delete(key);
             } else {
@@ -203,39 +203,91 @@
     },
 
     /**
+     * Check if currently running as installed PWA standalone app
+     */
+    isStandalone() {
+      return (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+        window.navigator.standalone === true ||
+        document.referrer.includes('android-app://')
+      );
+    },
+
+    /**
+     * Synchronize visibility and state of all install buttons (Home header, mobile menu, desktop nav)
+     */
+    updateInstallButtons() {
+      const standalone = this.isStandalone();
+      const homeBtn = document.getElementById('home-pwa-install-btn');
+      const mobileBtn = document.getElementById('mobile-pwa-install-btn');
+      const navBtn = document.getElementById('pwa-install-btn');
+
+      if (standalone) {
+        // App is already running in native standalone mode
+        if (homeBtn) {
+          homeBtn.classList.remove('hidden');
+          homeBtn.classList.add('inline-flex');
+          homeBtn.disabled = true;
+          homeBtn.classList.add('opacity-50', 'cursor-default');
+          homeBtn.classList.remove('hover:bg-primary', 'hover:text-black', 'text-primary');
+          homeBtn.classList.add('text-emerald-400', 'border-emerald-500/30', 'bg-emerald-500/10');
+          homeBtn.innerHTML = `
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>APP INSTALLED</span>
+          `;
+        }
+        if (mobileBtn) {
+          mobileBtn.classList.add('hidden');
+          mobileBtn.classList.remove('inline-flex');
+        }
+        if (navBtn) {
+          navBtn.classList.add('hidden');
+          navBtn.classList.remove('inline-flex');
+        }
+      } else {
+        // In browser mode: reveal install buttons on Home page & mobile drawer
+        if (homeBtn) {
+          homeBtn.classList.remove('hidden');
+          homeBtn.classList.add('inline-flex');
+        }
+        if (mobileBtn) {
+          mobileBtn.classList.remove('hidden');
+          mobileBtn.classList.add('inline-flex');
+        }
+        if (navBtn) {
+          if (deferredInstallPrompt) {
+            navBtn.classList.remove('hidden');
+            navBtn.classList.add('inline-flex');
+          } else {
+            navBtn.classList.add('hidden');
+          }
+        }
+      }
+    },
+
+    /**
      * Setup native beforeinstallprompt listener
      */
     initInstallPrompt() {
+      // Update buttons immediately on boot
+      this.updateInstallButtons();
+
       window.addEventListener('beforeinstallprompt', (e) => {
         // Prevent Chrome 67 and earlier from automatically showing the prompt
         e.preventDefault();
         deferredInstallPrompt = e;
         console.log('[PWA] Native app install prompt available.');
 
-        // Reveal install button in navigation
-        const installBtn = document.getElementById('pwa-install-btn');
-        if (installBtn) {
-          installBtn.classList.remove('hidden');
-          installBtn.classList.add('inline-flex');
-        }
-
-        const mobileInstallBtn = document.getElementById('mobile-pwa-install-btn');
-        if (mobileInstallBtn) {
-          mobileInstallBtn.classList.remove('hidden');
-          mobileInstallBtn.classList.add('flex');
-        }
+        // Update button visibility across views
+        PWA.updateInstallButtons();
       });
 
       window.addEventListener('appinstalled', () => {
         deferredInstallPrompt = null;
         console.log('[PWA] ZeroNode successfully installed as native application.');
         
-        // Hide install buttons
-        const installBtn = document.getElementById('pwa-install-btn');
-        if (installBtn) installBtn.classList.add('hidden');
-
-        const mobileInstallBtn = document.getElementById('mobile-pwa-install-btn');
-        if (mobileInstallBtn) mobileInstallBtn.classList.add('hidden');
+        PWA.updateInstallButtons();
 
         if (window.ZNodeDialog) {
           window.ZNodeDialog.alert('ZeroNode installed successfully to your system application launcher.', 'APP INSTALLED');
@@ -244,24 +296,55 @@
     },
 
     /**
-     * Trigger native PWA install prompt
+     * Trigger native PWA install prompt with intelligent platform fallbacks
      */
     async installApp() {
-      if (!deferredInstallPrompt) {
+      if (this.isStandalone()) {
+        const standaloneMsg = 'ZeroNode is already installed and running as a standalone application on your device.';
         if (window.ZNodeDialog) {
-          window.ZNodeDialog.alert('Application is already installed or your browser does not support automatic installation. You can add it via your browser menu: "Install App" or "Add to Home Screen".', 'INSTALL PWA');
+          window.ZNodeDialog.alert(standaloneMsg, 'APP INSTALLED');
+        } else {
+          alert(standaloneMsg);
         }
         return;
       }
 
-      deferredInstallPrompt.prompt();
-      const choiceResult = await deferredInstallPrompt.userChoice;
-      console.log('[PWA] User install choice:', choiceResult.outcome);
-
-      if (choiceResult.outcome === 'accepted') {
-        console.log('[PWA] User accepted installation prompt.');
+      // If browser triggered native beforeinstallprompt, present native OS prompt
+      if (deferredInstallPrompt) {
+        try {
+          deferredInstallPrompt.prompt();
+          const choiceResult = await deferredInstallPrompt.userChoice;
+          console.log('[PWA] User install choice:', choiceResult.outcome);
+          if (choiceResult.outcome === 'accepted') {
+            console.log('[PWA] User accepted installation prompt.');
+          }
+        } catch (err) {
+          console.warn('[PWA] Prompt invocation failed:', err);
+        }
+        deferredInstallPrompt = null;
+        this.updateInstallButtons();
+        return;
       }
-      deferredInstallPrompt = null;
+
+      // Platform-specific instructions when native prompt is deferred or unsupported
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        const iosMsg = 'To install ZeroNode on iOS:\n\n1. Tap the Share button in Safari (square icon with up arrow at the bottom of the screen)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" in the top-right corner.';
+        if (window.ZNodeDialog) {
+          window.ZNodeDialog.alert(iosMsg, 'INSTALL ON IOS');
+        } else {
+          alert(iosMsg);
+        }
+        return;
+      }
+
+      // Desktop Chrome, Edge, or Android fallback
+      const desktopMsg = 'To install ZeroNode on this device:\n\n• In Chrome / Edge: Click the Install icon in the address bar (or Menu ⋮ -> "Install ZeroNode" / "Save and share" -> "Install page as app")\n• On Android: Tap Menu ⋮ -> "Install app" or "Add to Home screen".';
+      if (window.ZNodeDialog) {
+        window.ZNodeDialog.alert(desktopMsg, 'INSTALL APP');
+      } else {
+        alert(desktopMsg);
+      }
     },
 
     /**

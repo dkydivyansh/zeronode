@@ -1,9 +1,9 @@
 /**
  * ZeroNode - Service Worker & Self-Updater
- * Cache Version: v1.2.1
+ * Cache Version: v1.2.2
  */
 
-const CACHE_VERSION = 'v1.2.1';
+const CACHE_VERSION = 'v1.2.2';
 const CACHE_NAME = `zeronode-${CACHE_VERSION}`;
 
 // Pre-cached core app shell assets
@@ -13,6 +13,7 @@ const PRECACHE_ASSETS = [
   '/offline',
   '/static/manifest.json',
   '/static/css/fonts.css',
+  '/static/css/style.css',
   '/static/js/tailwind.js',
   '/static/js/main.js',
   '/static/js/drive.js',

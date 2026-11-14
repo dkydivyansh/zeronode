@@ -276,7 +276,7 @@
 </div>
 
 <!-- Bottom Navigation (Global) -->
-<footer class="fixed bottom-0 w-full z-50 bg-black/95 backdrop-blur-md border-t border-outline-variant/20">
+<footer class="fixed bottom-0 w-full z-50 bg-[#0d0d0d] border-t border-outline-variant/20">
     <div class="flex justify-between items-center px-3 sm:px-4 md:px-5 lg:px-8 py-2 md:py-2.5 lg:py-3.5 gap-2 md:gap-4 min-w-0">
         <!-- Left Side: Logo & Mobile Toggle -->
         <div class="flex items-center justify-between w-full md:w-auto shrink-0">
@@ -333,8 +333,8 @@
         </div>
     </div>
 
-    <!-- Mobile Dropdown Menu (Anchored to slide upward from bottom footer) -->
-    <div id="mobile-menu-dropdown" class="hidden flex-col absolute bottom-full left-0 w-full bg-[#121212]/98 border-t border-outline-variant/30 px-6 py-6 pb-8 space-y-6 max-h-[75vh] overflow-y-auto shadow-2xl backdrop-blur-xl z-50">
+    <!-- Mobile Dropdown Menu (Anchored to slide upward from bottom footer with 100% solid opaque background) -->
+    <div id="mobile-menu-dropdown" class="hidden flex-col absolute bottom-full left-0 w-full bg-[#0d0d0d] border-t border-outline-variant/30 px-6 py-6 pb-8 space-y-6 max-h-[75vh] overflow-y-auto shadow-2xl z-50">
         <!-- Identity -->
         <div class="flex items-center gap-4 pb-4 border-b border-outline-variant/10">
             {% if user.profile_photo %}
@@ -360,11 +360,14 @@
             <a href="/app/{{ mod_id }}" class="font-label text-xs tracking-[0.2em] {% if module_name == mod_id %}text-primary font-bold{% else %}text-on-surface-variant/70{% endif %} hover:text-on-surface transition-colors uppercase interactive-el">{{ mod.name }}</a>
             {% endif %}
             {% endfor %}
-            <div class="flex items-center gap-4 mt-2">
+            <div class="flex flex-wrap items-center gap-3 mt-2">
                 <a href="#" onclick="(async ()=>{ await ZNodeSecurity.wipe(); window.location.href='/auth/logout'; })();" class="font-label text-xs tracking-[0.2em] text-error/80 hover:text-error transition-colors uppercase interactive-el">Logout</a>
                 <button class="dynamic-cache-btn font-mono text-[9px] tracking-widest text-primary/40 border border-primary/10 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase hidden">CACHE [0]</button>
                 <button id="pwa-update-mobile-btn" onclick="ZeroNodePWA.applyUpdate()" class="hidden font-mono text-[9px] tracking-widest text-tertiary border border-tertiary/40 bg-tertiary/10 px-2 py-0.5 hover:bg-tertiary hover:text-black transition-all interactive-el uppercase animate-pulse">UPDATE [NEW]</button>
-                <button id="mobile-pwa-install-btn" onclick="ZeroNodePWA.installApp()" class="hidden font-mono text-[9px] tracking-widest text-primary/70 border border-primary/20 px-2 py-0.5 hover:bg-primary/20 hover:text-primary transition-all interactive-el uppercase">INSTALL APP</button>
+                <button id="mobile-pwa-install-btn" onclick="ZeroNodePWA.installApp()" class="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-wider text-primary border border-primary/40 bg-primary/10 px-3 py-1.5 hover:bg-primary hover:text-black transition-all interactive-el uppercase" title="Install ZeroNode as an App">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>INSTALL APP</span>
+                </button>
             </div>
         </nav>
 
@@ -458,6 +461,19 @@
                             desktopMenu.appendChild(mobileDynamicMenu.firstChild);
                         }
                     }, 120);
+                }
+            });
+
+            // Close mobile menu when clicking or tapping outside of it
+            document.addEventListener('click', (e) => {
+                if (!mobileDropdown.classList.contains('hidden') && 
+                    !mobileDropdown.contains(e.target) && 
+                    !mobileBtn.contains(e.target)) {
+                    mobileDropdown.classList.add('hidden');
+                    mobileDropdown.classList.remove('flex');
+                    while (mobileDynamicMenu.firstChild) {
+                        desktopMenu.appendChild(mobileDynamicMenu.firstChild);
+                    }
                 }
             });
         }
