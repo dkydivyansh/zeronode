@@ -15,7 +15,7 @@ $DB_PATH      = $STORAGE_DIR . '/backup_registry.sqlite';
 
 // ─── RETENTION POLICY ────────────────────────────────────────────────────────
 // How many past backups to retain per target (user or server).
-// Whenever a new backup is finalized, backups beyond this count are automatically purged.
+// Whenever a new backup is finalized, backups beyond this count are automatically pruned.
 $MAX_BACKUPS_PER_TARGET = (int)(getenv('BACKUP_RETENTION_COUNT') ?: 4);
 
 // ─── UPLOAD LIMITS ───────────────────────────────────────────────────────────

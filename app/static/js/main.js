@@ -190,7 +190,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function performBackendSync() {
     try {
       const res = await fetch("/app/api/key/status");
-      if (!res.ok) throw new Error("Could not reach vault API");
+      if (!res.ok) throw new Error("Could not reach security service");
       const json = await res.json();
 
       if (json.has_key) {
@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         setupGenerationFlow();
       }
     } catch (e) {
-      errBox.textContent = "Network error connecting to Vault.";
+      errBox.textContent = "Network error connecting to security service.";
     }
   }
 
@@ -545,7 +545,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `zeronode_vault_${new Date().getTime()}.json`;
+          a.download = `zeronode_keys_${new Date().getTime()}.json`;
           a.click();
           URL.revokeObjectURL(url);
 
@@ -860,7 +860,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `zeronode_vault_recovered_${new Date().getTime()}.json`;
+            a.download = `zeronode_keys_recovered_${new Date().getTime()}.json`;
             a.click();
             URL.revokeObjectURL(url);
 

@@ -25,12 +25,12 @@
         return;
       }
 
-      // Proactively purge old caches and sanitize any leaked /api/ endpoints
+      // Proactively clear old caches and remove any leaked /api/ endpoints
       if ('caches' in window) {
         caches.keys().then((keys) => {
           keys.forEach((key) => {
             if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.1') {
-              console.log('[PWA] Purging obsolete cache store:', key);
+              console.log('[PWA] Clearing obsolete cache store:', key);
               caches.delete(key);
             } else {
               caches.open(key).then((cache) => {

@@ -176,7 +176,7 @@ def _sso_post(url: str, payload: dict) -> dict | None:
         req = urllib.request.Request(url, data=data, method='POST')
         req.add_header('Content-Type', 'application/json')
         req.add_header('Accept', 'application/json')
-        req.add_header('User-Agent', 'AetherisVault/1.0')
+        req.add_header('User-Agent', 'ZeroNode/1.0')
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode('utf-8'))
     except urllib.error.HTTPError as e:

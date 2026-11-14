@@ -394,7 +394,7 @@ def create_session(user_id: str) -> str:
 def validate_session(token: str) -> dict | None:
     """
     Validate a session token. Returns the user dict if valid, None otherwise.
-    Automatically purges expired sessions.
+    Automatically cleans up expired sessions.
     """
     if not token:
         return None
@@ -402,7 +402,7 @@ def validate_session(token: str) -> dict | None:
     conn = _get_conn()
     now = int(time.time())
 
-    # Purge expired sessions (background cleanup)
+    # Clean up expired sessions (background cleanup)
     conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
     conn.commit()
 
@@ -670,6 +670,9 @@ def nuclear_wipe_server() -> bool:
         print(f"Error during server reset: {e}")
         return True 
 
+# Alias for standard naming
+reset_server = nuclear_wipe_server
+
 def get_filtered_storage_report(limit: int = 10, search: str = None) -> list:
     """
     Retrieves storage metrics and user accounts with filtering and pagination.
@@ -876,7 +879,7 @@ def record_backup_result(target_type: str, target_id: str, success: bool, size: 
     return True
 
 def reset_backup_result(target_type: str, target_id: str) -> bool:
-    """Clear last backup metadata when an archive is deleted, missing, or purged remotely."""
+    """Clear last backup metadata when an archive is deleted or missing from the backup repository."""
     if _is_wiping:
         return False
     try:

@@ -241,10 +241,10 @@ def save_keys():
 
 @dashboard_bp.route('/api/key/load', methods=['GET'])
 def load_keys():
-    """Phase 2: Vault Unlock. Retrieves all wrapped keys."""
+    """Phase 2: Key Unlock. Retrieves all wrapped keys."""
     manager = get_user_manager()
     if manager.config_get("has_key") != "1":
-        return jsonify({"error": "Vault keys not set up"}), 404
+        return jsonify({"error": "Encryption keys not set up"}), 404
 
     return jsonify({
         "public_key": manager.config_get("public_key"),
@@ -254,10 +254,10 @@ def load_keys():
 
 @dashboard_bp.route('/api/key/recovery', methods=['GET'])
 def load_recovery_keys():
-    """Phase 3: Vault Recovery. Retrieves the backup phrase-wrapped key bundle."""
+    """Phase 3: Key Recovery. Retrieves the backup phrase-wrapped key bundle."""
     manager = get_user_manager()
     if manager.config_get("has_key") != "1":
-        return jsonify({"error": "Vault keys not set up"}), 404
+        return jsonify({"error": "Encryption keys not set up"}), 404
 
     return jsonify({
         "recovery_encrypted_private_key": manager.config_get("recovery_encrypted_private_key"),
@@ -275,7 +275,7 @@ def reset_keys():
         
     manager = get_user_manager()
     if manager.config_get("has_key") != "1":
-         return jsonify({"error": "No vault to reset."}), 404
+         return jsonify({"error": "No keys configured to reset."}), 404
          
     manager.config_set("encrypted_private_key", data['encrypted_private_key'])
     manager.config_set("key_salt", data['salt'])
@@ -447,7 +447,7 @@ def api_self_wipe():
     
     success = db_handler.wipe_self(user_id)
     if success:
-        return jsonify({"status": "IDENTITY_PURGED", "redirect": "/auth/logout?auto=1"}), 200
+        return jsonify({"status": "ACCOUNT_DELETED", "redirect": "/auth/logout?auto=1"}), 200
     else:
         return jsonify({"error": "Account deletion failed due to an internal error."}), 500
 

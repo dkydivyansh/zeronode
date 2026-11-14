@@ -1,6 +1,6 @@
 <?php
 /**
- * ZeroNode Backup Server — Delete Backup(s) / Purge Target or All
+ * ZeroNode Backup Server — Delete Backup(s) / Clear Target or All
  */
 
 require_once __DIR__ . '/../db.php';
@@ -44,9 +44,10 @@ if (!empty($data['all']) || !empty($_POST['all']) || !empty($_GET['all'])) {
     }
 
     json_response([
-        'success'      => true,
-        'purged_count' => count($rows),
-        'message'      => 'All remote backup archives and storage successfully deleted.',
+        'success'       => true,
+        'deleted_count' => count($rows),
+        'purged_count'  => count($rows),
+        'message'       => 'All remote backup archives and storage successfully deleted.',
     ]);
 }
 

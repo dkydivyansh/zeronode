@@ -154,7 +154,7 @@ class UserDataManager:
         return file_uuid
 
     def _cleanup_stale_uploads(self):
-        """INTERNAL: Purge files stuck in 'uploading' state (-1 size) for > 5 mins."""
+        """INTERNAL: Clean up files stuck in 'uploading' state (-1 size) for > 5 mins."""
         threshold = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
         
         with self._get_conn() as conn:

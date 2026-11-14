@@ -31,9 +31,9 @@ zeronode/
 │       ├── init.php                # Upload session initiation & target binding
 │       ├── chunk.php               # Chunk receiver with per-chunk SHA-256 validation
 │       ├── finalize.php            # Assembly, file-level SHA-256 check, & retention pruning
-│       ├── list.php                # Query stored remote archives & telemetry
+│       ├── list.php                # Query stored remote archives & metadata
 │       ├── download.php            # Secure streaming of backup packages
-│       ├── delete.php              # Manual archive purging
+│       ├── delete.php              # Manual archive deletion
 │       └── health.php              # Diagnostic node health check
 │
 ├── data/                           # User-isolated encrypted storage & master DB (gitignored)
@@ -48,9 +48,9 @@ zeronode/
     │
     ├── modules/                    # Pure Python backend engines (no Flask route decorators)
     │   ├── __init__.py
-    │   ├── db_handler.py           # Master DB operations, sessions, admins, server liquidation
+    │   ├── db_handler.py           # Master DB operations, sessions, admins, server reset
     │   ├── user_data.py            # Per-user E2EE filesystem & SQLite manager (UserDataManager)
-    │   └── backup_manager.py       # Chunked uploader, background scheduler, disaster recovery engine
+    │   └── backup_manager.py       # Chunked uploader, background scheduler, backup engine
     │
     ├── routes/                     # Public / unauthenticated route controllers
     │   ├── __init__.py
@@ -64,8 +64,8 @@ zeronode/
     │   └── modules/                # Self-contained dashboard feature modules
     │       ├── home/               # System overview module (identity, quota stats, quick actions)
     │       ├── drive/              # E2EE file explorer, folder trees, note editor, previewer
-    │       ├── backup/             # Vault disaster recovery, manual backups, upload restore
-    │       └── admin/              # Node administration, whitelist, disk stats, system wipe
+    │       ├── backup/             # Remote backups, manual backups, upload restore
+    │       └── admin/              # Server administration, whitelist, disk stats, system reset
     │
     ├── static/                     # Static assets (offline self-hosted, zero external CDNs)
     │   ├── css/                    # Typography (fonts.css) & global styles (style.css)
@@ -78,8 +78,8 @@ zeronode/
     └── templates/view/             # Public unauthenticated web templates
         ├── index.html              # Responsive landing hero page with interactive canvas
         ├── login.html              # SSO initialization interface
-        ├── logout.html             # Client-side cryptographic cache purging screen
-        └── deprovisioned.html      # System liquidation confirmation landing screen
+        ├── logout.html             # Client-side session cache clearing screen
+        └── deprovisioned.html      # System reset confirmation landing screen
 ```
 
 ---
@@ -143,7 +143,7 @@ User               ZeroNode Server                 SSO Provider
 2. **Server-to-Server Token Exchange**: The `client_secret` is kept exclusively on the server and is never exposed to the client.
 3. **Forced IPv4 Resolution**: `socket.getaddrinfo` is monkey-patched in `auth.py` (`_getaddrinfo_ipv4`) to prevent Docker/WSL DNS resolution timeouts caused by unsupported IPv6 network stacks.
 4. **Pre-Authorization Whitelist Gate**: Even after authenticating with SSO, users whose emails are absent from the `whitelist` table are instantly rejected (`/login?error=access_denied`).
-5. **Cryptographic Cache Purge on Logout**: Navigating to `/auth/logout` revokes the database session, clears cookies, and redirects to `/auth/exit`. The rendered interface (`logout.html`) runs an automated client-side script that authoritatively clears:
+5. **Local Session Cache Cleanup on Logout**: Navigating to `/auth/logout` revokes the database session, clears cookies, and redirects to `/auth/exit`. The rendered interface (`logout.html`) runs an automated client-side script that completely clears:
    - IndexedDB `ZNodeSession` (unwrapped private keys)
    - IndexedDB `ZeroNodeVaultCache` (cached encrypted file blobs)
    - `sessionStorage` and `localStorage` session artifacts.
@@ -160,6 +160,7 @@ Modules are activated strictly through `REGISTERED_MODULES` in `loader.py`:
 REGISTERED_MODULES = [
     "home",
     "drive",
+    "backup",
     "admin",
 ]
 ```
@@ -173,9 +174,10 @@ For every entry in `REGISTERED_MODULES`:
 ### 5.2 Active Modules
 | Module | Manifest Route | Mounted Endpoint | Access | Purpose |
 |--------|----------------|------------------|:------:|---------|
-| **Home** | `/` | `/app/home` | Authenticated | System status, storage telemetry, identity card, quick access |
+| **Home** | `/` | `/app/home` | Authenticated | System status, storage metrics, identity card, quick access |
 | **Drive** | `/`, `/<path:sub>` | `/app/drive`, `/app/drive/*` | Authenticated | E2EE file explorer, folder manager, notes, PDF viewer |
-| **Admin** | `/`, `/api/*` | `/app/admin`, `/app/admin/api/*` | Admin Only | User whitelist, admin ranks, storage reports, nuclear liquidation |
+| **Backup** | `/`, `/api/*` | `/app/backup`, `/app/backup/api/*` | Authenticated | Automated and manual backups, snapshot restores, cloud repository |
+| **Admin** | `/`, `/api/*` | `/app/admin`, `/app/admin/api/*` | Admin Only | User whitelist, admin ranks, storage reports, system reset |
 
 ---
 
@@ -224,7 +226,7 @@ Since every file has a unique, random 256-bit DEK, this guarantees mathematical 
 ### 7.2 Three-Phase Chunked Upload
 1. **Init (`POST /app/api/file/init`)**:
    - Takes `{ "file_name": "...", "aes_key": "...", "folder_id": null }`.
-   - Triggers `_cleanup_stale_uploads()` (purges incomplete uploads older than 5 minutes).
+   - Triggers `_cleanup_stale_uploads()` (cleans up incomplete uploads older than 5 minutes).
    - Generates UUID, touches empty `<uuid>.bin` on disk, records row in `files` table with `file_size = -1`.
 2. **Chunk (`POST /app/api/file/<uuid>/chunk`)**:
    - Client sends up to 4 parallel chunk uploads (`MAX_CONCURRENT = 4`).
@@ -234,7 +236,7 @@ Since every file has a unique, random 256-bit DEK, this guarantees mathematical 
 3. **Finalize (`POST /app/api/file/<uuid>/finalize`)**:
    - Validates file size on disk via `os.path.getsize()`.
    - Updates `file_size` and `last_modified` in the database.
-   - Clears user storage telemetry cache.
+   - Clears user storage statistics cache.
 
 ### 7.3 Dual Download Engines
 - **Engine A (RAM & Cache Engine for $\le$ 100 MB):** Fetches the binary stream, verifies tags per block, and caches in IndexedDB `ZeroNodeVaultCache`.
@@ -338,7 +340,7 @@ All `/app/*` endpoints require an active session cookie (`znode_session`).
 | `/auth/login` | `GET` | Public | Generates CSRF cookie and redirects to SSO provider |
 | `/auth/callback` | `GET` | Public | Validates state, exchanges code for JWT, creates session |
 | `/auth/logout` | `GET` | Public | Destroys session row and redirects to exit screen |
-| `/auth/exit` | `GET` | Public | Renders security cache purge interface |
+| `/auth/exit` | `GET` | Public | Renders session exit interface |
 
 ### 9.2 Vault Key Management API
 | Route | Method | Input | Output | Description |
@@ -374,22 +376,22 @@ All `/app/*` endpoints require an active session cookie (`znode_session`).
 | `/app/api/drive/delete/folder/<id>` | `POST` | — | `{ "status": "deleted" }` | Recursive cascade deletion of folder & contents |
 | `/app/api/drive/delete/file/<uuid>` | `POST` | — | `{ "status": "deleted" }` | Delete file through drive interface |
 | `/app/api/drive/search` | `GET` | Query: `?q=<query>&limit=50` | `{ "folders": [...], "files": [...] }` | Name search across files and folders |
-| `/app/api/user/self_wipe` | `POST` | JSON: `{ "confirmation": "I want to wipe my data" }` | `{ "status": "IDENTITY_PURGED", "redirect": "..." }` | Self-erasure protocol |
+| `/app/api/user/self_wipe` | `POST` | JSON: `{ "confirmation": "I want to wipe my data" }` | `{ "status": "ACCOUNT_DELETED", "redirect": "..." }` | User account self-deletion |
 
 ### 9.5 Administrative API Cluster (`admin_only = True`)
 | Route | Method | Input | Output | Description |
 |-------|:------:|-------|--------|-------------|
-| `/app/admin/api/stats` | `GET` | Query: `?search=<term>` | Storage report, host disk health, whitelist, admins | Telemetry report |
+| `/app/admin/api/stats` | `GET` | Query: `?search=<term>` | Storage report, host disk health, whitelist, admins | Storage and status report |
 | `/app/admin/api/promote` | `POST` | JSON: `{ "email": "..." }` | `{ "status": "ok" }` | Elevate whitelisted user to Admin |
 | `/app/admin/api/demote` | `POST` | JSON: `{ "email": "..." }` | `{ "status": "ok" }` | Revoke Admin status (self-demotion blocked) |
 | `/app/admin/api/whitelist/add` | `POST` | JSON: `{ "email": "..." }` | `{ "status": "ok" }` | Add email to access control ledger |
 | `/app/admin/api/whitelist/remove` | `POST` | JSON: `{ "email": "..." }` | `{ "status": "ok" }` | Evict email from access control ledger |
-| `/app/admin/api/user/wipe` | `POST` | JSON: `{ "user_id": "..." }` | `{ "status": "ERASURE_COMMITTED" }` | Admin purge of target user vault & records |
-| `/app/admin/api/server/wipe` | `POST` | JSON: `{ "confirmation": "ERASE ALL SERVER DATA" }` | `{ "status": "SYSTEM_LIQUIDATED" }` | Nuclear liquidation of entire node |
+| `/app/admin/api/user/wipe` | `POST` | JSON: `{ "user_id": "..." }` | `{ "status": "ERASURE_COMMITTED" }` | Admin deletion of target user files & records |
+| `/app/admin/api/server/wipe` | `POST` | JSON: `{ "confirmation": "ERASE ALL SERVER DATA" }` | `{ "status": "SYSTEM_RESET" }` | Complete reset of the server |
 
 ---
 
-## 10. System Liquidation Protocols
+## 10. System and Account Reset Protocols
 
 ZeroNode includes multi-tier physical data erasure engines engineered to break file locks on Windows and Linux systems:
 
@@ -398,12 +400,12 @@ ZeroNode includes multi-tier physical data erasure engines engineered to break f
    - Traverses `data/<user_id>/`, clears readonly attributes (`os.chmod(path, stat.S_IWRITE)`), and physically unlinks all `.bin` blobs and `<user_id>.db`.
 2. **`wipe_user(user_id, requester_email)`**:
    - Administrative gate prevents admins from wiping themselves via this protocol.
-   - Authoritatively purges the target user's physical directory and database rows.
-3. **`nuclear_wipe_server()`**:
-   - Verifies the forensic confirmation phrase `"ERASE ALL SERVER DATA"`.
-   - Purges `.env` credentials.
-   - Purges `data/` root using a 3-iteration retry loop with Windows readonly attribute breakers.
-   - Force unlinks `server_data.db`.
+   - Permanently deletes the target user's physical directory and database rows.
+3. **`reset_server()` / `nuclear_wipe_server()`**:
+   - Verifies the confirmation phrase `"ERASE ALL SERVER DATA"`.
+   - Deletes `.env` credentials.
+   - Deletes `data/` root using a 3-iteration retry loop with Windows readonly attribute breakers.
+   - Unlinks `server_data.db`.
    - Spawns a background thread that executes `os._exit(0)` after 1.5 seconds, terminating the server process.
 
 ---
@@ -438,9 +440,9 @@ services:
 
 ---
 
-## 12. Automated Remote Backup & Disaster Recovery Architecture
+## 12. Automated Remote Backup & Restore Architecture
 
-ZeroNode includes an enterprise-grade, automated disaster recovery subsystem featuring offsite zero-knowledge archive replication to a dedicated PHP/SQLite backup node.
+ZeroNode includes an automated backup subsystem featuring offsite archive replication to a dedicated PHP/SQLite backup server.
 
 ### 12.1 Cryptographic & Zero-Knowledge Guarantee
 The backup architecture strictly adheres to ZeroNode's zero-knowledge blind server principles:
@@ -453,19 +455,19 @@ The backup architecture strictly adheres to ZeroNode's zero-knowledge blind serv
    - Packages `server_data.db` (users, sessions, whitelists, administrative ranks) and manifest metadata.
    - **Default:** Enabled, **Daily** schedule. Configurable on the Admin console (`/app/admin#backup-section`).
 2. **Individual User Vault Backups:**
-   - Packages each user's isolated vault (`<user_id>.db`, all encrypted chunks in `blobs/`, and `manifest.json`).
+   - Packages each user's isolated storage (`<user_id>.db`, all encrypted chunks in `blobs/`, and `manifest.json`).
    - Formatted as `<user_id>_<timestamp>.zip.bin`.
    - **Administrators:** Enabled by default with **Daily** interval.
    - **Standard Users:** Disabled by default; selectively enabled by email with configurable interval (`daily` or `weekly`) on the Admin page.
 
 ### 12.3 3-Phase Chunked Upload with Integrity Checks
-Large vault archives are transferred using resilient chunking (2 MB blocks):
+Large archives are transferred using resilient chunking:
 1. **Phase 1: Initiation (`POST /api/init.php`)**
    - Transmits `target_type`, `target_id`, `filename`, `total_size`, `chunk_size`, `total_chunks`, and overall expected SHA-256 `file_hash`.
-   - The backup node registers an `upload_sessions` row in SQLite and returns a `session_id`.
+   - The backup server registers an `upload_sessions` row in SQLite and returns a `session_id`.
 2. **Phase 2: Chunk Transmission (`POST /api/chunk.php`)**
    - Each chunk is transmitted with a per-chunk `X-Chunk-Hash` header (and query parameter fallback).
-   - The backup node verifies the SHA-256 checksum of the incoming chunk against `X-Chunk-Hash` before saving it to `chunks/<session_id>/chunk_<idx>.part`.
+   - The backup server verifies the SHA-256 checksum of the incoming chunk against `X-Chunk-Hash` before saving it to `chunks/<session_id>/chunk_<idx>.part`.
    - Updates real-time progress (`10%` to `90%`) in `backup_tasks`.
 3. **Phase 3: Finalization & Assembly (`POST /api/finalize.php`)**
    - Stitches all chunks in sequential order into `storage/<target_id>/<filename>`.
@@ -479,26 +481,26 @@ Large vault archives are transferred using resilient chunking (2 MB blocks):
 - Bearer token / `X-API-Key` authentication defined in `backup-server/config.php`.
 - Schema auto-initialization with WAL mode (`backups` and `upload_sessions` tables).
 
-### 12.5 Real-Time Telemetry & UI Integration
+### 12.5 Real-Time Status & UI Integration
 - **Home Dashboard (`/app/home`):** Features a dedicated **Remote Backup Card** with live polling, visual progress bar, active upload target indicator, percentage display, last backup timestamp, size, SHA-256 checksum display, and a direct navigation link to `/app/backup`.
-- **Navigation Bar & Dedicated Backup Module (`/app/backup`):** Dedicated authenticated vault disaster recovery interface providing one-click manual backup trigger, latest vault restore, local archive upload restore, and archive ledger.
-- **Admin Console (`/app/admin`):** Comprehensive Disaster Recovery control center with remote node health tester, server backup scheduler, user policy table with toggle switches and interval selectors, and a remote archive vault table with download, restore, and on-demand purge capabilities.
+- **Navigation Bar & Dedicated Backup Module (`/app/backup`):** Dedicated authenticated backup interface providing one-click manual backup trigger, latest backup restore, local archive upload restore, and archive ledger.
+- **Admin Console (`/app/admin`):** Comprehensive backup control center with remote server health tester, server backup scheduler, user policy table with toggle switches and interval selectors, and a remote archive table with download, restore, and on-demand deletion capabilities.
 
 ---
 
-### 12.6 Disaster Recovery Restore Architecture & Overwrite Safeguards
+### 12.6 Backup Restore Architecture & Overwrite Safeguards
 
-ZeroNode provides full bidirectional disaster recovery, allowing users and administrators to reconstruct vaults or entire system state from remote or local archives:
+ZeroNode provides full bidirectional backup and restore, allowing users and administrators to reconstruct storage drives or entire system state from remote or local archives:
 
 #### 1. Restore Modalities
-- **User Vault Remote Restore (`POST /app/backup/api/user/restore`):** Authenticated user streams their latest snapshot (or a specific `backup_id`) from the PHP backup server into local storage.
-- **User Vault File Upload Restore (`POST /app/backup/api/user/restore_upload`):** Authenticated user uploads an offline `.zip.bin` file to reconstruct their vault without remote server dependencies.
-- **Server Master Remote Restore (`POST /app/admin/api/backup/remote/restore`):** Administrators restore master `server_data.db` or specific user vaults directly from the remote repository.
+- **User Remote Restore (`POST /app/backup/api/user/restore`):** Authenticated user streams their latest snapshot (or a specific `backup_id`) from the PHP backup server into local storage.
+- **User File Upload Restore (`POST /app/backup/api/user/restore_upload`):** Authenticated user uploads an offline `.zip.bin` file to reconstruct their drive without remote server dependencies.
+- **Server Master Remote Restore (`POST /app/admin/api/backup/remote/restore`):** Administrators restore master `server_data.db` or specific user drives directly from the remote repository.
 
 #### 2. Critical Overwrite Warning & Confirmation Safeguards
-Restoring an archive is a destructive operation that replaces active records. The system enforces strict multi-layered safeguards:
+Restoring an archive is an operation that replaces active records. The system enforces strict multi-layered safeguards:
 - **High-Visibility Amber Callouts:** Both `/app/backup` and `/app/admin` display prominent warning notices:
-  > **CRITICAL OVERWRITE NOTICE:** Executing a restore will permanently overwrite and replace active data for the target (Server master database or User vault). Files or records created after the archive timestamp will be replaced.
+  > **CRITICAL OVERWRITE NOTICE:** Executing a restore will permanently overwrite and replace active data for the target (Server master database or User drive). Files or records created after the archive timestamp will be replaced.
 - **Explicit Confirmation Prompt:** Every restore action mandates typing the exact phrase `"RESTORE DATA"`. Any typo or mismatch aborts the operation immediately at both the client dialog and backend API gate (`HTTP 400`).
 - **Cryptographic User Segregation:** `restore_archive()` parses embedded `manifest.json` and verifies that standard users can only restore archives matching their own `user_id`, blocking cross-tenant restore attempts (`PermissionError`).
 
@@ -511,16 +513,16 @@ Because ZeroNode maintains active SQLite connections in WAL mode, replacing data
 
 ---
 
-### 12.7 Forensic Deletion, Stale Task Healing & Bulk Archive Operations
+### 12.7 Stale Task Healing & Bulk Archive Operations
 
 1. **Stale Task Auto-Healing (Stuck Progress Prevention):**
    - In distributed or multi-threaded backup workflows, server restarts or network interruptions could leave a `backup_tasks` row in `running` state indefinitely (e.g. at 2%).
-   - `cleanup_stale_backup_tasks(timeout_seconds=180)` is automatically executed whenever active tasks or status telemetries are queried. Any task remaining in `running` state past the threshold is transitioned to `failed`.
+   - `cleanup_stale_backup_tasks(timeout_seconds=180)` is automatically executed whenever active tasks or status checks are queried. Any task remaining in `running` state past the threshold is transitioned to `failed`.
    - On server boot, `init_db()` marks all dangling `running` tasks as failed.
-   - When generating server database snapshots in `create_server_archive()`, active tasks in the temporary snapshot SQLite file are purged prior to archive compression, guaranteeing that restoring an archive never restores a stuck task into the live database.
+   - When generating server database snapshots in `create_server_archive()`, active tasks in the temporary snapshot SQLite file are cleared prior to archive compression, guaranteeing that restoring an archive never restores a stuck task into the live database.
 
-2. **Automated Remote Backup Purge on User Deletion:**
-   - When an identity is de-provisioned (via `wipe_self` or administrative `wipe_user`), `_atomic_erasure_internal()` issues a target purge request `backup_manager.delete_remote_backups_for_target(user_id)`.
+2. **Automated Remote Backup Cleanup on User Deletion:**
+   - When an account is deleted (via `wipe_self` or administrative `wipe_user`), `_atomic_erasure_internal()` issues a target cleanup request `backup_manager.delete_remote_backups_for_target(user_id)`.
    - The remote PHP backup server permanently removes the user's `storage/<user_id>/` directory and unlinks all associated records from SQLite.
 
 3. **Remote Backup Server Reset on Full Server Wipe:**

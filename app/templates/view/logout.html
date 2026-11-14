@@ -115,7 +115,7 @@
                 log('Result: LocalStorage cleared.', 'ok');
             }
 
-            // 3. Cryptographic Cache Purge (IndexedDB)
+            // 3. Clear Local Session Cache (IndexedDB)
             log(`IndexedDB: Clearing local caches...`, 'info');
             const deleteDb = (dbName) => new Promise((resolve) => {
                 const req = indexedDB.deleteDatabase(dbName);

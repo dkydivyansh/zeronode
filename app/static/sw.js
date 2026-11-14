@@ -70,20 +70,20 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(async () => {
-      // Purge any accidental /api/ keys that may have entered the cache
+      // Clear any accidental /api/ keys that may have entered the cache
       try {
         const currentCache = await caches.open(CACHE_NAME);
         const keys = await currentCache.keys();
         await Promise.all(
           keys.map((k) => {
             if (k.url.includes('/api/')) {
-              console.log('[SW] Purging leaked API request from cache:', k.url);
+              console.log('[SW] Removing leaked API request from cache:', k.url);
               return currentCache.delete(k);
             }
           })
         );
       } catch (err) {
-        console.debug('[SW] Cache purge cleanup skipped:', err.message);
+        console.debug('[SW] Cache cleanup skipped:', err.message);
       }
     }).then(() => {
       console.log(`[SW] Claiming clients for ${CACHE_VERSION}`);

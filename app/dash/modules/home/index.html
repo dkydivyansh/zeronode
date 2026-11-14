@@ -14,25 +14,14 @@
 {% set masked_email = local[:2] ~ '***' ~ local[-1:] ~ '@' ~ domain if local|length > 3 else local[:1] ~ '***@' ~ domain %}
 
 <div class="px-4 md:px-8 pt-12">
-    <!-- Welcome Header with App Version Telemetry Badge -->
-    <div class="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-            <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
-                Welcome, {{ user.first_name }}.
-            </h1>
-            <p class="font-label text-xs tracking-wider text-on-surface-variant/60">
-                Active Session &bull; {{ 'Administrator' if user.is_admin else 'Standard User' }}
-            </p>
-        </div>
-        <!-- App Version Telemetry Pill -->
-        <div class="flex items-center gap-2 self-start sm:self-auto">
-            <div class="inline-flex items-center gap-2.5 border border-outline-variant/30 bg-surface-container/40 px-3.5 py-1.5 font-mono text-[11px] text-on-surface-variant/80 shadow-sm">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span class="tracking-widest uppercase text-on-surface font-semibold">ZeroNode {{ app_version }}</span>
-                <span class="text-on-surface-variant/30">|</span>
-                <span class="text-on-surface-variant/60 text-[10px]">{{ build_id or 'BUILD 2026.11' }}</span>
-            </div>
-        </div>
+    <!-- Welcome Header -->
+    <div class="mb-12">
+        <h1 class="font-headline text-3xl md:text-5xl font-bold tracking-wider text-on-surface mb-3">
+            Welcome, {{ user.first_name }}.
+        </h1>
+        <p class="font-label text-xs tracking-wider text-on-surface-variant/60">
+            Active Session &bull; {{ 'Administrator' if user.is_admin else 'Standard User' }}
+        </p>
     </div>
 
     <!-- Stats Grid -->
@@ -568,7 +557,7 @@
                 });
                 
                 const data = await resp.json();
-                if (data.status === "IDENTITY_PURGED") {
+                if (data.status === "ACCOUNT_DELETED" || data.status === "IDENTITY_PURGED" || resp.ok) {
                     window.location.href = data.redirect || '/auth/logout?auto=1';
                 } else {
                     await ZNodeDialog.alert("Deletion Failed", data.error || "An error occurred while deleting your account.");

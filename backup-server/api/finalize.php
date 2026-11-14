@@ -167,6 +167,7 @@ json_response([
     'file_hash'       => $finalHash,
     'created_at'      => $now,
     'retained_count'  => count($allBackups) - $purgedCount,
+    'pruned_count'    => $purgedCount,
     'purged_count'    => $purgedCount,
 ], 200);
 
