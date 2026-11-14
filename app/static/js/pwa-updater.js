@@ -29,7 +29,7 @@
       if ('caches' in window) {
         caches.keys().then((keys) => {
           keys.forEach((key) => {
-            if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.0') {
+            if (key.startsWith('zeronode-') && key !== 'zeronode-v1.2.1') {
               console.log('[PWA] Purging obsolete cache store:', key);
               caches.delete(key);
             } else {

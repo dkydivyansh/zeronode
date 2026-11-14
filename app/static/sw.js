@@ -1,9 +1,9 @@
 /**
  * ZeroNode - Service Worker & Self-Updater
- * Cache Version: v1.2.0
+ * Cache Version: v1.2.1
  */
 
-const CACHE_VERSION = 'v1.2.0';
+const CACHE_VERSION = 'v1.2.1';
 const CACHE_NAME = `zeronode-${CACHE_VERSION}`;
 
 // Pre-cached core app shell assets
@@ -32,6 +32,7 @@ const PRECACHE_ASSETS = [
 
 // 1. Install Event: Cache Core App Shell
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   console.log(`[SW] Installing ZeroNode Service Worker (${CACHE_VERSION})...`);
   
   event.waitUntil(
