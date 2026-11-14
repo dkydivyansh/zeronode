@@ -483,12 +483,19 @@ const ZNodeBackupModule = {
             btn.textContent = 'INITIALIZING...';
         }
         try {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.startBackupModal('user', "Your Account Drive");
+            }
             const res = await fetch('/app/backup/api/user/trigger', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
             const data = await res.json();
-            if (!res.ok) {
+            if (res.ok) {
+                if (window.ZNodeBackupLive && data.task_id) {
+                    window.ZNodeBackupLive.setTaskId(data.task_id);
+                }
+            } else {
                 await ZNodeDialog.alert("BACKUP FAILED", data.error || "Failed to trigger user backup.");
                 if (btn) {
                     btn.disabled = false;
@@ -710,15 +717,21 @@ const ZNodeBackupModule = {
         btn.disabled = true;
         btn.textContent = 'INITIALIZING...';
         try {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.startBackupModal('server', "System Server Data");
+            }
             const res = await fetch('/app/admin/api/backup/trigger', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ target_type: 'server', target_id: 'server' })
             });
+            const data = await res.json();
             if (res.ok) {
+                if (window.ZNodeBackupLive && data.task_id) {
+                    window.ZNodeBackupLive.setTaskId(data.task_id);
+                }
                 this.scheduleNext(500);
             } else {
-                const data = await res.json();
                 await ZNodeDialog.alert("BACKUP FAILED", data.error || "Could not start server backup.");
                 btn.disabled = false;
                 btn.textContent = 'Backup Server Now';
@@ -892,7 +905,7 @@ const ZNodeBackupModule = {
                            class="font-label text-[9px] tracking-wider text-primary hover:bg-primary hover:text-black border border-primary/30 px-2.5 py-1.5 transition-all uppercase font-bold inline-block">
                             DOWNLOAD
                         </a>
-                        <button onclick="ZNodeBackupModule.promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}')" 
+                        <button onclick="ZNodeBackupModule.promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}', '${b.target_id}')" 
                                 class="font-label text-[9px] tracking-wider text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2.5 py-1.5 transition-all uppercase font-bold">
                             RESTORE
                         </button>
@@ -926,6 +939,9 @@ const ZNodeBackupModule = {
         }
 
         try {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.startRestoreModal('user', "Your Account Drive");
+            }
             const res = await fetch('/app/backup/api/user/restore', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -933,8 +949,9 @@ const ZNodeBackupModule = {
             });
             const data = await res.json();
             if (res.ok) {
-                await ZNodeDialog.alert("RESTORE SUCCESSFUL", "Drive data and files have been successfully restored.");
-                window.location.reload();
+                if (window.ZNodeBackupLive && data.task_id) {
+                    window.ZNodeBackupLive.setTaskId(data.task_id);
+                }
             } else {
                 await ZNodeDialog.alert("RESTORE FAILED", data.error || "Failed to restore drive data.");
             }
@@ -972,14 +989,18 @@ const ZNodeBackupModule = {
         formData.append('confirmation', promptVal);
 
         try {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.startRestoreModal('user', file.name);
+            }
             const res = await fetch('/app/backup/api/user/restore_upload', {
                 method: 'POST',
                 body: formData
             });
             const data = await res.json();
             if (res.ok) {
-                await ZNodeDialog.alert("RESTORE SUCCESSFUL", `Restore completed successfully (${data.result.blob_count || 0} items restored).`);
-                window.location.reload();
+                if (window.ZNodeBackupLive && data.task_id) {
+                    window.ZNodeBackupLive.setTaskId(data.task_id);
+                }
             } else {
                 await ZNodeDialog.alert("RESTORE FAILED", data.error || "Failed to restore from file.");
             }
@@ -990,8 +1011,8 @@ const ZNodeBackupModule = {
         }
     },
 
-    async promptRemoteRestore(backupId, filename, targetType) {
-        const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${targetType})`;
+    async promptRemoteRestore(backupId, filename, targetType, targetId) {
+        const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${(targetId || '').slice(0, 8)}...)`;
         const confirmed = await ZNodeDialog.confirm(
             "CONFIRM RESTORE",
             `Restoring from backup [${filename}] will replace current data for ${targetName}.\n\nRecords created after this snapshot will be replaced.\n\nDo you want to proceed?`
@@ -1009,23 +1030,23 @@ const ZNodeBackupModule = {
         }
 
         try {
+            if (window.ZNodeBackupLive) {
+                window.ZNodeBackupLive.startRestoreModal(targetType, filename);
+            }
             const res = await fetch('/app/admin/api/backup/remote/restore', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     backup_id: backupId,
                     target_type: targetType,
+                    target_id: targetId,
                     confirmation: input
                 })
             });
             const data = await res.json();
             if (res.ok) {
-                await ZNodeDialog.alert("RESTORE COMPLETE", `Target [${targetName}] restored successfully.`);
-                if (targetType === 'server') {
-                    window.location.reload();
-                } else {
-                    this.fetchUserStatus();
-                    this.loadAdminConsole();
+                if (window.ZNodeBackupLive && data.task_id) {
+                    window.ZNodeBackupLive.setTaskId(data.task_id);
                 }
             } else {
                 await ZNodeDialog.alert("RESTORE FAILED", data.error || "Restore execution rejected.");
@@ -1052,7 +1073,69 @@ const ZNodeBackupModule = {
         }
     },
 
+    onLiveEvent(ev) {
+        if (!ev) return;
+        if (ev.operation === 'backup' || ev.type.startsWith('backup_')) {
+            const isUser = ev.target_type === 'user';
+            const isServer = ev.target_type === 'server';
+            const progress = ev.progress || 0;
+            const step = ev.step || '';
+
+            if (isUser) {
+                const box = document.getElementById('user-upload-progress-box');
+                const bar = document.getElementById('user-upload-bar');
+                const pct = document.getElementById('user-upload-percent');
+                const stepEl = document.getElementById('user-upload-step');
+                const badge = document.getElementById('user-backup-badge');
+
+                if (ev.type === 'backup_progress') {
+                    if (box) box.classList.remove('hidden');
+                    if (bar) bar.style.width = `${progress}%`;
+                    if (pct) pct.textContent = `${progress}%`;
+                    if (stepEl) stepEl.textContent = step;
+                    if (badge) {
+                        badge.className = "font-label text-[10px] px-3 py-1 tracking-widest border border-amber-500/40 text-amber-400 bg-amber-500/10 uppercase animate-pulse";
+                        badge.textContent = `UPLOADING (${progress}%)`;
+                    }
+                } else if (ev.type === 'backup_completed') {
+                    if (box) box.classList.add('hidden');
+                    this.fetchUserStatus();
+                    if (this.isAdmin) this.loadRemoteArchives();
+                } else if (ev.type === 'backup_failed') {
+                    if (box) box.classList.add('hidden');
+                    this.fetchUserStatus();
+                }
+            } else if (isServer && this.isAdmin) {
+                const box = document.getElementById('server-task-progress-box');
+                const bar = document.getElementById('server-task-bar');
+                const pct = document.getElementById('server-task-pct');
+                const stepEl = document.getElementById('server-task-step');
+
+                if (ev.type === 'backup_progress') {
+                    if (box) box.classList.remove('hidden');
+                    if (bar) bar.style.width = `${progress}%`;
+                    if (pct) pct.textContent = `${progress}%`;
+                    if (stepEl) stepEl.textContent = step;
+                } else if (ev.type === 'backup_completed') {
+                    if (box) box.classList.add('hidden');
+                    this.loadAdminConsole();
+                    this.loadRemoteArchives();
+                } else if (ev.type === 'backup_failed') {
+                    if (box) box.classList.add('hidden');
+                    this.loadAdminConsole();
+                }
+            }
+        } else if (ev.operation === 'restore' || ev.type.startsWith('restore_')) {
+            if (ev.type === 'restore_completed') {
+                this.fetchUserStatus();
+                if (this.isAdmin) this.loadAdminConsole();
+                if (this.isAdmin) this.loadRemoteArchives();
+            }
+        }
+    },
+
     init() {
+        window.addEventListener('znode:backup:event', (e) => this.onLiveEvent(e.detail));
         this.fetchUserStatus();
         if (this.isAdmin) {
             this.loadAdminConsole();

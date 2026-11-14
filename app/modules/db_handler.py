@@ -90,6 +90,20 @@ def init_db():
             backup_hash     TEXT DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_backup_tasks_target ON backup_tasks(target_id, started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS restore_tasks (
+            task_id         TEXT PRIMARY KEY,
+            target_type     TEXT NOT NULL,
+            target_id       TEXT NOT NULL,
+            backup_id       TEXT DEFAULT '',
+            status          TEXT NOT NULL,
+            progress        INTEGER DEFAULT 0,
+            current_step    TEXT DEFAULT '',
+            started_at      INTEGER NOT NULL,
+            completed_at    INTEGER DEFAULT 0,
+            error_message   TEXT DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_restore_tasks_target ON restore_tasks(target_id, started_at DESC);
     """)
 
     conn.commit()
@@ -131,6 +145,13 @@ def init_db():
         UPDATE backup_tasks
         SET status = 'failed',
             error_message = 'Task interrupted by server restart',
+            completed_at = ?
+        WHERE status = 'running'
+    """, (now,))
+    conn.execute("""
+        UPDATE restore_tasks
+        SET status = 'failed',
+            error_message = 'Restore task interrupted by server restart',
             completed_at = ?
         WHERE status = 'running'
     """, (now,))
@@ -900,3 +921,93 @@ def get_recent_backup_tasks(limit: int = 20) -> list:
     rows = conn.execute("SELECT * FROM backup_tasks ORDER BY started_at DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ─── Restore Task Management ──────────────────────────────────────────
+
+def create_restore_task(task_id: str, target_type: str, target_id: str, backup_id: str = '') -> bool:
+    """Create a new restore task record."""
+    conn = _get_conn()
+    now = int(time.time())
+    conn.execute("""
+        INSERT OR REPLACE INTO restore_tasks (task_id, target_type, target_id, backup_id, status, progress, current_step, started_at)
+        VALUES (?, ?, ?, ?, 'running', 0, 'Initiating restore...', ?)
+    """, (task_id, target_type, target_id, backup_id, now))
+    conn.commit()
+    conn.close()
+    return True
+
+def update_restore_task(task_id: str, **kwargs) -> bool:
+    """Update progress, status, or details of an active restore task."""
+    conn = _get_conn()
+    allowed = ['status', 'progress', 'current_step', 'completed_at', 'error_message']
+    updates = []
+    params = []
+    for k, v in kwargs.items():
+        if k in allowed:
+            updates.append(f"{k} = ?")
+            params.append(v)
+            
+    if kwargs.get('status') in ['success', 'failed'] and 'completed_at' not in kwargs:
+        updates.append("completed_at = ?")
+        params.append(int(time.time()))
+        
+    if not updates:
+        conn.close()
+        return True
+        
+    params.append(task_id)
+    query = f"UPDATE restore_tasks SET {', '.join(updates)} WHERE task_id = ?"
+    conn.execute(query, params)
+    conn.commit()
+    conn.close()
+    return True
+
+def cleanup_stale_restore_tasks(timeout_seconds: int = 300) -> int:
+    """Marks any restore tasks in 'running' state longer than timeout as failed."""
+    now = int(time.time())
+    stale_threshold = now - timeout_seconds
+    conn = _get_conn()
+    cursor = conn.execute("""
+        UPDATE restore_tasks
+        SET status = 'failed',
+            error_message = 'Restore task timed out or was interrupted.',
+            completed_at = ?
+        WHERE status = 'running' AND started_at < ?
+    """, (now, stale_threshold))
+    conn.commit()
+    count = cursor.rowcount
+    conn.close()
+    return count
+
+def get_restore_task(task_id: str) -> dict | None:
+    """Retrieve details for a specific restore task ID."""
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM restore_tasks WHERE task_id = ?", (task_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_active_restore_task(target_type: str, target_id: str) -> dict | None:
+    """Retrieve currently running restore task if any."""
+    cleanup_stale_restore_tasks()
+    conn = _get_conn()
+    row = conn.execute("""
+        SELECT * FROM restore_tasks
+        WHERE target_type = ? AND target_id = ? AND status = 'running'
+        ORDER BY started_at DESC LIMIT 1
+    """, (target_type, target_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_any_active_restore_task() -> dict | None:
+    """Retrieve any currently running restore task across the system."""
+    cleanup_stale_restore_tasks()
+    conn = _get_conn()
+    row = conn.execute("""
+        SELECT * FROM restore_tasks
+        WHERE status = 'running'
+        ORDER BY started_at DESC LIMIT 1
+    """, ()).fetchone()
+    conn.close()
+    return dict(row) if row else None
+

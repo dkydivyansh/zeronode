@@ -17,6 +17,7 @@ class Manifest(ModuleManifest):
         "/api/user/download",
         "/api/user/restore",
         "/api/user/restore_upload",
+        "/api/user/restore_task_status",
     ]
 
     def get_view(self, module_name: str, **kwargs):
@@ -28,12 +29,14 @@ class Manifest(ModuleManifest):
         if path == "/api/user/status":
             cfg = db_handler.get_user_backup_config(email)
             active_task = db_handler.get_active_backup_task('user', user_id)
+            active_restore = db_handler.get_active_restore_task('user', user_id)
             latest_task = db_handler.get_latest_backup_task('user', user_id)
             if not latest_task:
                 latest_task = db_handler.get_latest_backup_task('user', email)
             is_admin = db_handler.is_admin(email)
             server_settings = db_handler.get_backup_settings() if is_admin else {}
             global_active = db_handler.get_any_active_backup_task() if is_admin else None
+            global_active_restore = db_handler.get_any_active_restore_task() if is_admin else None
 
             return jsonify({
                 "user_id": user_id,
@@ -46,8 +49,10 @@ class Manifest(ModuleManifest):
                 "last_size": int(cfg.get('last_size') or 0),
                 "last_hash": cfg.get('last_hash', ''),
                 "active_task": active_task,
+                "active_restore_task": active_restore,
                 "latest_task": latest_task,
                 "global_active_task": global_active,
+                "global_active_restore_task": global_active_restore,
                 "is_admin": is_admin,
                 "server_backup_enabled": server_settings.get('server_backup_enabled') == '1' if is_admin else False,
                 "server_backup_interval": server_settings.get('server_backup_interval', 'daily') if is_admin else None,
@@ -115,8 +120,8 @@ class Manifest(ModuleManifest):
                         return jsonify({"error": "No remote backup archive found for your account."}), 404
                     backup_id = user_backups[0]['id']
 
-                res = backup_manager.restore_from_backup_id(backup_id, expected_target_type='user', expected_target_id=user_id)
-                return jsonify({"status": "restored", "result": res}), 200
+                task_id = backup_manager.trigger_restore_async('user', user_id, backup_id=backup_id)
+                return jsonify({"status": "started", "task_id": task_id}), 202
             except Exception as e:
                 return jsonify({"error": str(e)}), 400
 
@@ -133,14 +138,22 @@ class Manifest(ModuleManifest):
             os.close(temp_fd)
             try:
                 file.save(temp_path)
-                res = backup_manager.restore_archive(temp_path, expected_target_type='user', expected_target_id=user_id)
-                return jsonify({"status": "restored", "result": res}), 200
+                task_id = backup_manager.trigger_restore_async('user', user_id, archive_file_path=temp_path)
+                return jsonify({"status": "started", "task_id": task_id}), 202
             except Exception as e:
-                return jsonify({"error": str(e)}), 400
-            finally:
                 if os.path.exists(temp_path):
                     try: os.remove(temp_path)
                     except OSError: pass
+                return jsonify({"error": str(e)}), 400
+
+        # User Restore Task Status (Polling fallback for WebSocket)
+        if path == "/api/user/restore_task_status":
+            task_id = request.args.get('task_id')
+            if not task_id:
+                task = db_handler.get_active_restore_task('user', user_id)
+            else:
+                task = db_handler.get_restore_task(task_id)
+            return jsonify({"task": task}), 200
 
         # Render Main Backup View
         is_admin = db_handler.is_admin(email)

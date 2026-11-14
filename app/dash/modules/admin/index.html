@@ -829,6 +829,9 @@ async function triggerServerBackupNow() {
     btn.textContent = 'INITIALIZING...';
     
     try {
+        if (window.ZNodeBackupLive) {
+            window.ZNodeBackupLive.startBackupModal('server', 'System Server Data');
+        }
         const res = await fetch('/app/admin/api/backup/trigger', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -836,6 +839,9 @@ async function triggerServerBackupNow() {
         });
         const data = await res.json();
         if (res.ok) {
+            if (window.ZNodeBackupLive && data.task_id) {
+                window.ZNodeBackupLive.setTaskId(data.task_id);
+            }
             scheduleBackupPoll(500);
         } else {
             await ZNodeDialog.alert("BACKUP FAILED", data.error || "Could not start server backup.");
@@ -903,6 +909,9 @@ async function enableBackupByEmail() {
 
 async function triggerUserBackupNow(userId, email) {
     try {
+        if (window.ZNodeBackupLive) {
+            window.ZNodeBackupLive.startBackupModal('user', email || userId);
+        }
         const res = await fetch('/app/admin/api/backup/trigger', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -910,6 +919,9 @@ async function triggerUserBackupNow(userId, email) {
         });
         const data = await res.json();
         if (res.ok) {
+            if (window.ZNodeBackupLive && data.task_id) {
+                window.ZNodeBackupLive.setTaskId(data.task_id);
+            }
             loadBackupConsole();
         } else {
             await ZNodeDialog.alert("TRIGGER FAILED", data.error || "Could not trigger user backup.");
@@ -1019,7 +1031,7 @@ async function loadRemoteArchives() {
                        class="font-label text-[9px] tracking-wider text-primary hover:bg-primary hover:text-black border border-primary/30 px-2.5 py-1.5 transition-all uppercase font-bold inline-block">
                         DOWNLOAD
                     </a>
-                    <button onclick="promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}')" 
+                    <button onclick="promptRemoteRestore('${b.id}', '${b.filename}', '${b.target_type}', '${b.target_id}')" 
                             class="font-label text-[9px] tracking-wider text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2.5 py-1.5 transition-all uppercase font-bold">
                         RESTORE
                     </button>
@@ -1035,8 +1047,8 @@ async function loadRemoteArchives() {
     }
 }
 
-async function promptRemoteRestore(backupId, filename, targetType) {
-    const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${targetType})`;
+async function promptRemoteRestore(backupId, filename, targetType, targetId) {
+    const targetName = targetType === 'server' ? 'SYSTEM DATABASE & SERVER DATA' : `USER ACCOUNT (${(targetId || '').slice(0, 8)}...)`;
     const confirmed = await ZNodeDialog.confirm(
         "CONFIRM RESTORE",
         `Restoring from backup [${filename}] will replace current data for ${targetName}.\n\nRecords created after this snapshot will be replaced.\n\nDo you want to proceed?`
@@ -1054,23 +1066,23 @@ async function promptRemoteRestore(backupId, filename, targetType) {
     }
 
     try {
+        if (window.ZNodeBackupLive) {
+            window.ZNodeBackupLive.startRestoreModal(targetType, filename);
+        }
         const res = await fetch('/app/admin/api/backup/remote/restore', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 backup_id: backupId,
                 target_type: targetType,
+                target_id: targetId,
                 confirmation: input
             })
         });
         const data = await res.json();
         if (res.ok) {
-            await ZNodeDialog.alert("RESTORE COMPLETE", `Target [${targetName}] restored successfully.`);
-            if (targetType === 'server') {
-                window.location.reload();
-            } else {
-                loadBackupConsole();
-                loadRemoteArchives();
+            if (window.ZNodeBackupLive && data.task_id) {
+                window.ZNodeBackupLive.setTaskId(data.task_id);
             }
         } else {
             await ZNodeDialog.alert("RESTORE FAILED", data.error || "Restore execution rejected.");
@@ -1100,6 +1112,43 @@ async function deleteRemoteArchive(backupId, filename) {
         await ZNodeDialog.alert("ERROR", "Failed to communicate with backup server.");
     }
 }
+
+function onAdminLiveBackupEvent(ev) {
+    if (!ev) return;
+    if (ev.operation === 'backup' || ev.type.startsWith('backup_')) {
+        const isServer = ev.target_type === 'server';
+        const progress = ev.progress || 0;
+        const step = ev.step || '';
+
+        if (isServer) {
+            const box = document.getElementById('server-task-progress-box');
+            const bar = document.getElementById('server-task-bar');
+            const pct = document.getElementById('server-task-pct');
+            const stepEl = document.getElementById('server-task-step');
+            if (ev.type === 'backup_progress') {
+                if (box) box.classList.remove('hidden');
+                if (bar) bar.style.width = `${progress}%`;
+                if (pct) pct.textContent = `${progress}%`;
+                if (stepEl) stepEl.textContent = step;
+            } else if (ev.type === 'backup_completed' || ev.type === 'backup_failed') {
+                if (box) box.classList.add('hidden');
+                loadBackupConsole();
+                loadRemoteArchives();
+            }
+        } else {
+            if (ev.type === 'backup_completed' || ev.type === 'backup_failed') {
+                loadBackupConsole();
+                loadRemoteArchives();
+            }
+        }
+    } else if (ev.operation === 'restore' || ev.type.startsWith('restore_')) {
+        if (ev.type === 'restore_completed' || ev.type === 'restore_failed') {
+            loadBackupConsole();
+            loadRemoteArchives();
+        }
+    }
+}
+window.addEventListener('znode:backup:event', (e) => onAdminLiveBackupEvent(e.detail));
 
 // Initial data load and periodic polling
 if (document.getElementById('admins-table-body')) {

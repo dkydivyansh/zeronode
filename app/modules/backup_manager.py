@@ -15,6 +15,7 @@ import urllib.error
 import shutil
 from datetime import datetime, timezone
 from app.modules import db_handler
+from app.modules import backup_events
 
 # Module-level scheduler lock and state
 _scheduler_started = False
@@ -184,8 +185,9 @@ def _send_request(url: str, method: str = 'POST', headers: dict = None, body: by
 
 def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_hash: str, file_size: int, metadata: dict, task_id: str) -> dict:
     """
-    Executes a 3-phase chunked upload with per-chunk SHA-256 validation
+    Executes chunked upload with per-chunk SHA-256 validation
     and overall archive verification against the PHP backup server.
+    Emits real-time progress events over WebSockets at every phase.
     """
     settings = db_handler.get_backup_settings()
     server_url = (settings.get('backup_server_url') or 'http://127.0.0.1:8080').rstrip('/')
@@ -196,13 +198,24 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
     timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{target_id}_{timestamp_slug}.zip.bin"
 
+    step_msg = "Negotiating upload session with remote backup server..."
     db_handler.update_backup_task(
         task_id, 
-        progress=5, 
-        current_step="Negotiating upload session with backup server...",
+        progress=28, 
+        current_step=step_msg,
         backup_filename=filename,
         backup_hash=file_hash
     )
+    backup_events.broadcast_event({
+        "type": "backup_progress",
+        "operation": "backup",
+        "task_id": task_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "phase": "init",
+        "progress": 28,
+        "step": step_msg
+    })
 
     # ── Phase 1: Initialize Upload Session ───────────────────────────────────
     init_url = f"{server_url}/api/init.php"
@@ -238,7 +251,7 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
                 break
 
             chunk_hash = hashlib.sha256(chunk_data).hexdigest().lower()
-            chunk_url = f"{server_url}/api/chunk.php?session_id={session_id}&chunk_index={idx}&chunk_hash={chunk_hash}"
+            target_chunk_url = f"{server_url}/api/chunk.php?session_id={session_id}&chunk_index={idx}&chunk_hash={chunk_hash}"
             chunk_headers = {
                 "Authorization": f"Bearer {api_key}",
                 "X-Session-ID": session_id,
@@ -247,20 +260,45 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
                 "Content-Type": "application/octet-stream"
             }
 
-            chunk_res = _send_request(chunk_url, method='POST', headers=chunk_headers, body=chunk_data)
+            chunk_res = _send_request(target_chunk_url, method='POST', headers=chunk_headers, body=chunk_data)
             if not chunk_res.get('success'):
                 raise RuntimeError(chunk_res.get('error', f"Chunk {idx} rejected by backup server."))
 
-            # Update live progress (10% to 90%)
-            pct = int(10 + ((idx + 1) / total_chunks) * 80)
+            # Live upload progress scales from 30% to 85%
+            pct = int(30 + ((idx + 1) / total_chunks) * 55)
+            step_msg = f"Uploading chunk {idx + 1}/{total_chunks} ({pct}%)..."
             db_handler.update_backup_task(
                 task_id, 
                 progress=pct, 
-                current_step=f"Uploading chunk {idx + 1}/{total_chunks} ({pct}%)"
+                current_step=step_msg
             )
+            backup_events.broadcast_event({
+                "type": "backup_progress",
+                "operation": "backup",
+                "task_id": task_id,
+                "target_type": target_type,
+                "target_id": target_id,
+                "phase": "upload",
+                "progress": pct,
+                "step": step_msg,
+                "chunk_index": idx + 1,
+                "total_chunks": total_chunks
+            })
 
     # ── Phase 3: Finalize, Verify Full Hash & Auto-Prune ──────────────────────
-    db_handler.update_backup_task(task_id, progress=92, current_step="Verifying remote checksum & auto-pruning...")
+    step_msg = "Verifying remote checksum & auto-pruning archives on backup server..."
+    db_handler.update_backup_task(task_id, progress=88, current_step=step_msg)
+    backup_events.broadcast_event({
+        "type": "backup_progress",
+        "operation": "backup",
+        "task_id": task_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "phase": "verify",
+        "progress": 88,
+        "step": step_msg
+    })
+
     finalize_url = f"{server_url}/api/finalize.php"
     finalize_payload = json.dumps({"session_id": session_id}).encode('utf-8')
     finalize_headers = {
@@ -271,13 +309,6 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
     finalize_res = _send_request(finalize_url, method='POST', headers=finalize_headers, body=finalize_payload)
     if not finalize_res.get('success'):
         raise RuntimeError(finalize_res.get('error', "Final assembly and verification failed."))
-
-    db_handler.update_backup_task(
-        task_id,
-        status="success",
-        progress=100,
-        current_step="Backup verified and finalized successfully."
-    )
 
     db_handler.record_backup_result(
         target_type, target_id,
@@ -291,7 +322,14 @@ def upload_chunked_backup(zip_path: str, target_type: str, target_id: str, file_
 
 def run_backup(target_type: str, target_id: str, task_id: str = None) -> bool:
     """
-    Complete synchronous execution pipeline for backing up a user or server.
+    Complete execution pipeline for backing up a user or server.
+    Phases:
+      1. Compress: snapshots DB and compresses drive data into temporary .zip.bin (0% - 25%)
+      2. Hash & Init: computes SHA-256 and registers upload session (25% - 30%)
+      3. Upload: streams chunk by chunk with SHA-256 check (30% - 85%)
+      4. Verify: verifies remote assembly and checksum (85% - 95%)
+      5. Cleanup: deletes local temporary compressed zip (95% - 99%)
+      6. Finalized: marks task success and broadcasts completion (100%)
     """
     if not task_id:
         task_id = str(uuid.uuid4())
@@ -299,10 +337,21 @@ def run_backup(target_type: str, target_id: str, task_id: str = None) -> bool:
 
     temp_zip_path = None
     try:
-        db_handler.update_backup_task(task_id, progress=2, current_step="Generating backup snapshot...")
+        # Phase 1: Compress
+        step_msg = "Creating database snapshot and compressing drive into zip archive..."
+        db_handler.update_backup_task(task_id, progress=5, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "backup_progress",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "compress",
+            "progress": 5,
+            "step": step_msg
+        })
 
         if target_type == 'user':
-            # Target ID might be an email, resolve to user_id
             user_id = target_id
             if '@' in target_id:
                 conn = db_handler._get_conn()
@@ -318,8 +367,55 @@ def run_backup(target_type: str, target_id: str, task_id: str = None) -> bool:
         else:
             raise ValueError(f"Invalid target_type: {target_type}")
 
-        # Stream chunked upload
+        step_msg = "Drive data compressed into temporary archive. Computing checksum..."
+        db_handler.update_backup_task(task_id, progress=25, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "backup_progress",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "compress",
+            "progress": 25,
+            "step": step_msg
+        })
+
+        # Phase 2, 3, 4: Upload chunks & verify on remote server
         upload_chunked_backup(temp_zip_path, target_type, target_id, file_hash, file_size, metadata, task_id)
+
+        # Phase 5: Delete local compressed zip
+        step_msg = "Deleting local temporary compressed archive..."
+        db_handler.update_backup_task(task_id, progress=96, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "backup_progress",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "cleanup",
+            "progress": 96,
+            "step": step_msg
+        })
+        if temp_zip_path and os.path.exists(temp_zip_path):
+            try: os.remove(temp_zip_path)
+            except OSError: pass
+
+        # Phase 6: Finalized
+        step_msg = "Backup verified and finalized successfully."
+        db_handler.update_backup_task(task_id, status="success", progress=100, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "backup_completed",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "done",
+            "progress": 100,
+            "step": step_msg,
+            "file_hash": file_hash,
+            "size": file_size
+        })
+
         return True
 
     except Exception as e:
@@ -331,6 +427,17 @@ def run_backup(target_type: str, target_id: str, task_id: str = None) -> bool:
             current_step="Failed"
         )
         db_handler.record_backup_result(target_type, target_id, success=False, error=error_msg)
+        backup_events.broadcast_event({
+            "type": "backup_failed",
+            "operation": "backup",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "failed",
+            "progress": 0,
+            "step": f"Backup failed: {error_msg}",
+            "error": error_msg
+        })
         return False
 
     finally:
@@ -471,17 +578,74 @@ def stream_remote_backup(backup_id: str):
         raise RuntimeError(f"Could not connect to backup server: {e}")
 
 
-def download_backup_to_temp(backup_id: str) -> str:
-    """Downloads a remote backup archive into a local temporary file."""
+def download_backup_to_temp(backup_id: str, task_id: str = None, target_type: str = None, target_id: str = None) -> str:
+    """Downloads a remote backup archive into a local temporary file with progress updates."""
     remote_resp = stream_remote_backup(backup_id)
+    total_bytes = 0
+    try:
+        total_bytes = int(remote_resp.headers.get('Content-Length') or 0)
+    except Exception:
+        total_bytes = 0
+
     temp_fd, temp_path = tempfile.mkstemp(prefix="znode_restore_", suffix=".zip.bin")
+    downloaded_bytes = 0
+    last_report_bytes = 0
+    last_report_time = time.time()
+
     with os.fdopen(temp_fd, 'wb') as f:
         while True:
             chunk = remote_resp.read(65536)
             if not chunk:
                 break
             f.write(chunk)
+            downloaded_bytes += len(chunk)
+
+            # Report every 256KB or every 0.3s
+            now = time.time()
+            if (downloaded_bytes - last_report_bytes >= 262144) or (now - last_report_time >= 0.3):
+                last_report_bytes = downloaded_bytes
+                last_report_time = now
+                if total_bytes > 0:
+                    ratio = min(1.0, downloaded_bytes / total_bytes)
+                    prog = 5 + int(ratio * 35)  # 5% to 40%
+                    step_msg = f"Downloading remote archive: {downloaded_bytes / (1024*1024):.2f} MB / {total_bytes / (1024*1024):.2f} MB ({int(ratio * 100)}%)..."
+                else:
+                    prog = 20
+                    step_msg = f"Downloading remote archive: {downloaded_bytes / (1024*1024):.2f} MB..."
+
+                if task_id:
+                    db_handler.update_restore_task(task_id, progress=prog, current_step=step_msg)
+                    backup_events.broadcast_event({
+                        "type": "restore_progress",
+                        "operation": "restore",
+                        "task_id": task_id,
+                        "target_type": target_type,
+                        "target_id": target_id,
+                        "phase": "download",
+                        "progress": prog,
+                        "step": step_msg,
+                        "downloaded_bytes": downloaded_bytes,
+                        "total_bytes": total_bytes
+                    })
+
     remote_resp.close()
+
+    if task_id:
+        step_msg = f"Download complete ({downloaded_bytes / (1024*1024):.2f} MB). Verifying archive..."
+        db_handler.update_restore_task(task_id, progress=40, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "restore_progress",
+            "operation": "restore",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "download",
+            "progress": 40,
+            "step": step_msg,
+            "downloaded_bytes": downloaded_bytes,
+            "total_bytes": total_bytes
+        })
+
     return temp_path
 
 
@@ -518,13 +682,29 @@ def _restore_sqlite_database(snapshot_path: str, target_db_path: str) -> None:
     shutil.copyfile(snapshot_path, target_db_path)
 
 
-def restore_archive(archive_path: str, expected_target_type: str = None, expected_target_id: str = None) -> dict:
+def restore_archive(archive_path: str, expected_target_type: str = None, expected_target_id: str = None, task_id: str = None) -> dict:
     """
-    Restores user vault or server state from a .zip.bin archive.
+    Restores user drive or server state from a .zip.bin archive.
     Validates manifest.json, overwrites database and chunk blobs.
+    Broadcasts step progress across verify, restore_db, restore_blobs, and cleanup phases.
     """
     if not os.path.exists(archive_path):
         raise FileNotFoundError("Backup archive file does not exist.")
+
+    # Phase 2: Verify & Manifest Inspection
+    step_msg = "Inspecting backup manifest and validating archive structure..."
+    if task_id:
+        db_handler.update_restore_task(task_id, progress=45, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "restore_progress",
+            "operation": "restore",
+            "task_id": task_id,
+            "target_type": expected_target_type,
+            "target_id": expected_target_id,
+            "phase": "verify",
+            "progress": 45,
+            "step": step_msg
+        })
 
     with zipfile.ZipFile(archive_path, 'r') as zf:
         # 1. Read & Validate Manifest
@@ -536,14 +716,14 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
 
         format_type = manifest.get("format")
 
-        # ── Branch A: User Vault Restore ─────────────────────────────────
+        # ── Branch A: User Drive Restore ─────────────────────────────────
         if format_type in ("zeronode_user_backup", "zeronode_vault_backup") or manifest.get("type") == "user":
             user_id = manifest.get("user_id")
             if not user_id:
                 raise ValueError("Manifest missing user_id.")
-            if expected_target_id and expected_target_id != user_id:
+            if expected_target_id and expected_target_id != 'server' and expected_target_id != user_id:
                 raise PermissionError(f"Archive belongs to user '{user_id}', cannot restore to '{expected_target_id}'.")
-            if expected_target_type and expected_target_type != 'user':
+            if expected_target_type and expected_target_type not in ('user', 'server'):
                 raise ValueError(f"Expected target type '{expected_target_type}' but archive is 'user'.")
 
             from flask import current_app
@@ -555,9 +735,23 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
             user_dir = os.path.normpath(os.path.join(data_root, user_id))
             os.makedirs(user_dir, exist_ok=True)
 
-            # A.1: Restore <user_id>.db
+            # Phase 3: Restore <user_id>.db
             db_arcname = f"{user_id}.db"
             if db_arcname in zf.namelist():
+                step_msg = f"Restoring user database ({db_arcname})..."
+                if task_id:
+                    db_handler.update_restore_task(task_id, progress=55, current_step=step_msg)
+                    backup_events.broadcast_event({
+                        "type": "restore_progress",
+                        "operation": "restore",
+                        "task_id": task_id,
+                        "target_type": "user",
+                        "target_id": user_id,
+                        "phase": "restore_db",
+                        "progress": 55,
+                        "step": step_msg
+                    })
+
                 temp_db_fd, temp_db_path = tempfile.mkstemp(suffix=".db")
                 os.close(temp_db_fd)
                 try:
@@ -570,17 +764,63 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
                         try: os.remove(temp_db_path)
                         except OSError: pass
 
-            # A.2: Restore Encrypted Blobs
+            # Phase 4: Restore Encrypted Blobs
+            blob_items = [item for item in zf.namelist() if item.startswith("blobs/") and item.endswith(".bin")]
+            total_blobs = len(blob_items)
+            step_msg = f"Restoring {total_blobs} encrypted file chunk blobs..."
+            if task_id:
+                db_handler.update_restore_task(task_id, progress=70, current_step=step_msg)
+                backup_events.broadcast_event({
+                    "type": "restore_progress",
+                    "operation": "restore",
+                    "task_id": task_id,
+                    "target_type": "user",
+                    "target_id": user_id,
+                    "phase": "restore_blobs",
+                    "progress": 70,
+                    "step": step_msg,
+                    "blob_count": total_blobs
+                })
+
             blob_count = 0
-            for item in zf.namelist():
-                if item.startswith("blobs/") and item.endswith(".bin"):
-                    fname = os.path.basename(item)
-                    if fname:
-                        blob_bytes = zf.read(item)
-                        dest_path = os.path.join(user_dir, fname)
-                        with open(dest_path, 'wb') as f:
-                            f.write(blob_bytes)
-                        blob_count += 1
+            for idx, item in enumerate(blob_items):
+                fname = os.path.basename(item)
+                if fname:
+                    blob_bytes = zf.read(item)
+                    dest_path = os.path.join(user_dir, fname)
+                    with open(dest_path, 'wb') as f:
+                        f.write(blob_bytes)
+                    blob_count += 1
+
+                if task_id and (idx % 10 == 0 or idx == total_blobs - 1):
+                    prog = 70 + int(((idx + 1) / max(1, total_blobs)) * 20)
+                    step_sub = f"Restored {idx + 1}/{total_blobs} chunk blobs..."
+                    db_handler.update_restore_task(task_id, progress=prog, current_step=step_sub)
+                    backup_events.broadcast_event({
+                        "type": "restore_progress",
+                        "operation": "restore",
+                        "task_id": task_id,
+                        "target_type": "user",
+                        "target_id": user_id,
+                        "phase": "restore_blobs",
+                        "progress": prog,
+                        "step": step_sub
+                    })
+
+            # Phase 5: Cleanup staging
+            step_msg = "Finalizing user drive restore..."
+            if task_id:
+                db_handler.update_restore_task(task_id, progress=95, current_step=step_msg)
+                backup_events.broadcast_event({
+                    "type": "restore_progress",
+                    "operation": "restore",
+                    "task_id": task_id,
+                    "target_type": "user",
+                    "target_id": user_id,
+                    "phase": "cleanup",
+                    "progress": 95,
+                    "step": step_msg
+                })
 
             return {
                 "success": True,
@@ -596,8 +836,22 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
             if expected_target_type and expected_target_type != 'server':
                 raise ValueError(f"Expected target type '{expected_target_type}' but archive is 'server'.")
 
-            # B.1: Restore server_data.db
+            # Phase 3: Restore server_data.db
             if "server_data.db" in zf.namelist():
+                step_msg = "Restoring master server database (server_data.db)..."
+                if task_id:
+                    db_handler.update_restore_task(task_id, progress=60, current_step=step_msg)
+                    backup_events.broadcast_event({
+                        "type": "restore_progress",
+                        "operation": "restore",
+                        "task_id": task_id,
+                        "target_type": "server",
+                        "target_id": "server",
+                        "phase": "restore_db",
+                        "progress": 60,
+                        "step": step_msg
+                    })
+
                 temp_db_fd, temp_db_path = tempfile.mkstemp(suffix=".db")
                 os.close(temp_db_fd)
                 try:
@@ -610,6 +864,29 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
                         try: os.remove(temp_db_path)
                         except OSError: pass
 
+                # Re-ensure restore task record exists in newly restored DB
+                if task_id:
+                    try:
+                        db_handler.create_restore_task(task_id, "server", "server")
+                        db_handler.update_restore_task(task_id, status="running", progress=90, current_step="Master database restored successfully.")
+                    except Exception:
+                        pass
+
+            # Phase 5: Cleanup
+            step_msg = "Finalizing master server restore..."
+            if task_id:
+                db_handler.update_restore_task(task_id, progress=95, current_step=step_msg)
+                backup_events.broadcast_event({
+                    "type": "restore_progress",
+                    "operation": "restore",
+                    "task_id": task_id,
+                    "target_type": "server",
+                    "target_id": "server",
+                    "phase": "cleanup",
+                    "progress": 95,
+                    "step": step_msg
+                })
+
             return {
                 "success": True,
                 "target_type": "server",
@@ -620,6 +897,102 @@ def restore_archive(archive_path: str, expected_target_type: str = None, expecte
 
         else:
             raise ValueError(f"Unsupported backup archive format: {format_type}")
+
+
+def run_restore(target_type: str, target_id: str, backup_id: str = None, archive_file_path: str = None, task_id: str = None) -> bool:
+    """
+    Executes an end-to-end restore operation.
+    Downloads from remote backup server if backup_id is provided, or uses uploaded archive_file_path.
+    Emits granular WebSocket events for download, verify, restore_db, restore_blobs, cleanup, and completion.
+    """
+    if not task_id:
+        task_id = str(uuid.uuid4())
+        db_handler.create_restore_task(task_id, target_type, target_id, backup_id=backup_id or '')
+
+    temp_downloaded_path = None
+    try:
+        if backup_id:
+            step_msg = "Connecting to remote backup server..."
+            db_handler.update_restore_task(task_id, progress=5, current_step=step_msg)
+            backup_events.broadcast_event({
+                "type": "restore_progress",
+                "operation": "restore",
+                "task_id": task_id,
+                "target_type": target_type,
+                "target_id": target_id,
+                "phase": "download",
+                "progress": 5,
+                "step": step_msg
+            })
+            temp_downloaded_path = download_backup_to_temp(backup_id, task_id=task_id, target_type=target_type, target_id=target_id)
+            archive_to_restore = temp_downloaded_path
+        elif archive_file_path:
+            archive_to_restore = archive_file_path
+        else:
+            raise ValueError("Neither backup_id nor archive_file_path was provided for restore.")
+
+        res = restore_archive(archive_to_restore, expected_target_type=target_type, expected_target_id=target_id, task_id=task_id)
+
+        actual_type = res.get('target_type') or target_type
+        actual_id = res.get('target_id') or target_id
+
+        # Final Phase: Done
+        step_msg = f"Restore completed successfully. All data restored for {actual_type}."
+        db_handler.update_restore_task(task_id, target_type=actual_type, target_id=actual_id, status="success", progress=100, current_step=step_msg)
+        backup_events.broadcast_event({
+            "type": "restore_completed",
+            "operation": "restore",
+            "task_id": task_id,
+            "target_type": actual_type,
+            "target_id": actual_id,
+            "phase": "done",
+            "progress": 100,
+            "step": step_msg,
+            "details": res
+        })
+        return True
+
+    except Exception as e:
+        err_msg = str(e)
+        db_handler.update_restore_task(task_id, status="failed", progress=0, current_step=f"Restore failed: {err_msg}", error_message=err_msg)
+        backup_events.broadcast_event({
+            "type": "restore_failed",
+            "operation": "restore",
+            "task_id": task_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "phase": "failed",
+            "progress": 0,
+            "step": f"Restore failed: {err_msg}",
+            "error": err_msg
+        })
+        return False
+
+    finally:
+        if temp_downloaded_path and os.path.exists(temp_downloaded_path):
+            try: os.remove(temp_downloaded_path)
+            except OSError: pass
+        if archive_file_path and os.path.exists(archive_file_path):
+            try: os.remove(archive_file_path)
+            except OSError: pass
+
+
+def trigger_restore_async(target_type: str, target_id: str, backup_id: str = None, archive_file_path: str = None) -> str:
+    """
+    Asynchronously launches a restore job in a background daemon thread.
+    Returns task_id immediately.
+    """
+    task_id = str(uuid.uuid4())
+    db_handler.create_restore_task(task_id, target_type, target_id, backup_id=backup_id or '')
+
+    t = threading.Thread(
+        target=run_restore,
+        args=(target_type, target_id, backup_id, archive_file_path, task_id),
+        name=f"RestoreWorker-{task_id[:8]}",
+        daemon=True
+    )
+    t.start()
+    return task_id
 
 
 def restore_from_backup_id(backup_id: str, expected_target_type: str = None, expected_target_id: str = None) -> dict:

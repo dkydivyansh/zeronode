@@ -16,7 +16,8 @@ class Manifest(ModuleManifest):
         "/api/backup/user/config", "/api/backup/trigger",
         "/api/backup/test_connection", "/api/backup/remote/list",
         "/api/backup/remote/delete", "/api/backup/remote/delete_bulk", 
-        "/api/backup/remote/download", "/api/backup/remote/restore"
+        "/api/backup/remote/download", "/api/backup/remote/restore",
+        "/api/backup/restore_task_status"
     ]
 
     def get_view(self, module_name, **kwargs):
@@ -100,7 +101,9 @@ class Manifest(ModuleManifest):
             return jsonify({
                 "settings": db_handler.get_backup_settings(),
                 "user_configs": db_handler.get_all_user_backup_configs(),
-                "recent_tasks": db_handler.get_recent_backup_tasks(limit=15)
+                "recent_tasks": db_handler.get_recent_backup_tasks(limit=15),
+                "active_backup": db_handler.get_any_active_backup_task(),
+                "active_restore": db_handler.get_any_active_restore_task()
             })
 
         if path == "/api/backup/settings":
@@ -215,12 +218,23 @@ class Manifest(ModuleManifest):
             if not backup_id:
                 return jsonify({"error": "backup_id parameter required"}), 400
 
-            target_type = data.get('target_type')
+            target_type = data.get('target_type') or 'server'
+            target_id = data.get('target_id')
+            if not target_id:
+                target_id = 'server' if target_type == 'server' else None
             try:
-                res = backup_manager.restore_from_backup_id(backup_id, expected_target_type=target_type)
-                return jsonify({"status": "restored", "result": res}), 200
+                task_id = backup_manager.trigger_restore_async(target_type, target_id or 'server', backup_id=backup_id)
+                return jsonify({"status": "started", "task_id": task_id}), 202
             except Exception as e:
                 return jsonify({"error": str(e)}), 400
+
+        if path == "/api/backup/restore_task_status":
+            task_id = request.args.get('task_id')
+            if not task_id:
+                active = db_handler.get_any_active_restore_task()
+                return jsonify({"task": active}), 200
+            task = db_handler.get_restore_task(task_id)
+            return jsonify({"task": task}), 200
 
         return jsonify({"error": "Endpoint not found"}), 404
 

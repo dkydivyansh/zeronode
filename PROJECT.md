@@ -523,10 +523,47 @@ Because ZeroNode maintains active SQLite connections in WAL mode, replacing data
    - When an identity is de-provisioned (via `wipe_self` or administrative `wipe_user`), `_atomic_erasure_internal()` issues a target purge request `backup_manager.delete_remote_backups_for_target(user_id)`.
    - The remote PHP backup server permanently removes the user's `storage/<user_id>/` directory and unlinks all associated records from SQLite.
 
-3. **Remote Backup Server Liquidation on Nuclear Server Wipe:**
-   - Authorizing `nuclear_wipe_server()` triggers `backup_manager.delete_all_remote_backups()`.
-   - The remote backup server purges all user and server archives across all storage directories and truncates `backups` and `upload_sessions` tables.
+3. **Remote Backup Server Reset on Full Server Wipe:**
+   - Authorizing server reset triggers `backup_manager.delete_all_remote_backups()`.
+   - The remote backup server deletes all user and server archives across all storage directories and truncates `backups` and `upload_sessions` tables.
 
-4. **Bulk Selection & Purge in Remote Storage Vault:**
+4. **Bulk Selection & Deletion in Remote Storage Repository:**
    - Both `/app/admin` and `/app/backup` feature bulk selection checkboxes with a master "Select All" toggle.
-   - Administrators can select multiple archives and purge them simultaneously via `POST /app/admin/api/backup/remote/delete_bulk`.
+   - Administrators can select multiple archives and delete them simultaneously via `POST /app/admin/api/backup/remote/delete_bulk`.
+
+---
+
+### 12.8 Real-Time WebSocket Progress & Granular Pipeline Execution
+
+ZeroNode utilizes a persistent WebSocket event bus for zero-latency, real-time progress broadcasting during backup and restore workflows:
+
+#### 1. WebSocket Infrastructure (`/ws/backup`)
+- **Engine:** Built with `flask-sock` and `simple-websocket`, mounted at `/ws/backup`.
+- **Session Authentication:** Handshakes authenticate against the active `zeronode_session` cookie (or query parameter token). Unauthenticated sockets are immediately rejected.
+- **Tenant Isolation & Administrative Scoping:** The `BackupEventBroadcaster` enforces strict tenant scoping: administrators receive live progress updates for all system and user operations; standard users exclusively receive events matching their own `user_id`.
+- **CSP Compliance:** `connect-src` in `Content-Security-Policy` explicitly permits `ws:` and `wss:` protocols.
+
+#### 2. Strict Granular Backup Pipeline
+Backups execute in a deterministic, phased sequence with continuous WebSocket updates:
+1. **Compress Phase (0% - 25%):** Snapshots the active SQLite database using the SQLite Backup API and packages it with pre-encrypted ciphertext chunks into a temporary `.zip.bin` archive.
+2. **Hash & Init Phase (25% - 30%):** Computes overall file SHA-256 and registers an upload session with the remote backup server.
+3. **Upload Phase (30% - 85%):** Streams chunk by chunk (2 MB blocks) with chunk SHA-256 header validation, updating progress percent, chunk count, and transferred bytes.
+4. **Verify Phase (85% - 95%):** Remote backup server stitches chunks, validates total SHA-256 against expected hash, and commits archive metadata.
+5. **Cleanup Phase (95% - 99%):** The local temporary compressed `.zip.bin` archive is securely unlinked from the local host.
+6. **Done Phase (100%):** Marks task as `success` in `backup_tasks` and broadcasts completion event with archive details.
+
+#### 3. Strict Granular Restore Pipeline
+Restores execute asynchronously in a background worker daemon (`trigger_restore_async`), emitting live events:
+1. **Download Phase (0% - 40%):** Streams the remote archive from the backup repository, broadcasting live downloaded bytes, total file size, and download percentage.
+2. **Verify Phase (40% - 50%):** Validates archive structure and `manifest.json`, asserting target user/server compatibility.
+3. **Restore DB Phase (50% - 70%):** Restores SQLite database snapshot into the target database safely using in-process Online Backup API without Windows WAL file lock contention.
+4. **Restore Blobs Phase (70% - 90%):** Reconstructs all encrypted binary chunk blobs into the user's drive directory with per-file progress updates.
+5. **Cleanup Phase (90% - 98%):** Removes temporary staging files and downloaded archives from the local host.
+6. **Done Phase (100%):** Marks restore task complete and broadcasts completion event.
+
+#### 4. Frontend Live Operation Modal (`app/static/js/backup_live.js`)
+- **Global Operation Hub:** Injected across all dashboard views (`shell.html`).
+- **Visual Stepper:** Features a 5-stage pipeline stepper with active pulse animations and completed checkmarks (`✓`).
+- **Precision Progress Bar:** Displays smooth animated percentage gradient with live status message and transfer speeds.
+- **Live Event Log Terminal:** Timestamped event log stream for real-time visibility into internal phases.
+- **Non-Blocking Minimization:** Users can minimize the dialog to work in other tabs while the background task completes unimpeded.
